@@ -1,0 +1,14 @@
+[package]
+name = "chemistry-tools"
+version = "0.1.0"
+authors = ["Ryan Jones-Ward <sciguyryan@gmail.com>"]
+edition = "2021"
+description = "A crate with various chemistry-related tools."
+license = "LGPL 2.1"
+repository = "https://github.com/sciguyryan/Chemistry-Tools"
+homepage = "https://github.com/sciguyryan/Chemistry-Tools"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
