@@ -4,8 +4,8 @@ mod equation_parser;
 use crate::equation_parser::*;
 
 fn main() {
-    let formula = "(NH4)3PO4";
+    let formula = "H2O"; // CaSO₄·(H₂O)₂
 
-    let r = equation_parser::parser::parse(formula);
+    let r = parser::parse2(formula);
     println!("{:?}", r);
 }

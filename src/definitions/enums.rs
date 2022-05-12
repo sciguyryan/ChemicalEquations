@@ -251,6 +251,7 @@ impl FromStr for Symbol {
     }
 }
 
+#[allow(unused)]
 enum Elements {
     Hydrogen,
     Helium,
@@ -370,4 +371,21 @@ enum Elements {
     Livermorium,
     Tennessine,
     Oganesson,
+}
+
+pub struct AllElementData {}
+
+impl AllElementData {}
+
+#[derive(Default)]
+pub struct ElementData {}
+
+impl ElementData {
+    pub fn new() -> Self {
+        let mut e = Self::default();
+        e.initialize();
+        e
+    }
+
+    fn initialize(&mut self) {}
 }
