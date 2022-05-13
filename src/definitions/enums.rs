@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 #[allow(unused)]
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Symbol {
     H,
     He,

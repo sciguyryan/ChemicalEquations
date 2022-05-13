@@ -2,6 +2,8 @@ use crate::definitions::enums::Symbol;
 
 use std::{collections::HashMap, iter::Peekable, ops::MulAssign, slice::Iter, str::FromStr};
 
+use super::tokenizer::{self, TokenTypes};
+
 #[derive(Debug, Clone)]
 pub struct SymbolCounter {
     pub symbol: Symbol,
@@ -20,61 +22,10 @@ impl MulAssign<u32> for SymbolCounter {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum TokenTypes {
-    /// Initial token.
-    Start,
-    /// A numeric character.
-    Digit(char),
-    /// A left (opening) parenthesis.
-    LParen,
-    /// A right (closing) parenthesis.
-    RParen,
-    /// The characters of an element symbol.
-    ElementHead(char),
-    /// The characters of an element symbol.
-    ElementTail(char),
-    /// A mid-dot special character.
-    Dot,
-    /// The end token.
-    End,
-}
+fn serialize_until_matching_paren(iter: &mut Peekable<Iter<TokenTypes>>) -> String {
+    let mut buffer = String::new();
 
-pub fn lex_string(chars: &[char]) -> Vec<TokenTypes> {
-    let mut tokens: Vec<TokenTypes> = vec![TokenTypes::Start];
-
-    for (i, c) in chars.iter().enumerate() {
-        match c {
-            '(' => {
-                tokens.push(TokenTypes::LParen);
-            }
-            ')' => {
-                tokens.push(TokenTypes::RParen);
-            }
-            '0'..='9' => {
-                tokens.push(TokenTypes::Digit(*c));
-            }
-            'A'..='Z' => {
-                tokens.push(TokenTypes::ElementHead(*c));
-            }
-            'a'..='z' => {
-                tokens.push(TokenTypes::ElementTail(*c));
-            }
-            '.' => {
-                tokens.push(TokenTypes::Dot);
-            }
-            _ => {
-                eprintln!("Invalid character, {}, at index {}", c, i);
-            }
-        }
-    }
-
-    tokens.push(TokenTypes::End);
-
-    tokens
-}
-
-fn serialize_until_matching_paren(buffer: &mut String, iter: &mut Peekable<Iter<TokenTypes>>) {
+    // The counter to indicate the depth of the parenthesis.
     let mut paren_index: usize = 1;
 
     // Iterate until we reach the end of the segment.
@@ -120,9 +71,13 @@ fn serialize_until_matching_paren(buffer: &mut String, iter: &mut Peekable<Iter<
     if paren_index > 0 {
         panic!("Error: mismatching parenthesis.");
     }
+
+    buffer
 }
 
-fn serialize_until_segment_end(buffer: &mut String, iter: &mut Peekable<Iter<TokenTypes>>) {
+fn serialize_until_segment_end(iter: &mut Peekable<Iter<TokenTypes>>) -> String {
+    let mut buffer = String::new();
+
     // Iterate until we reach the end of the segment.
     while let Some(t) = iter.next_if(|&x| !matches!(x, TokenTypes::Dot)) {
         match t {
@@ -152,9 +107,11 @@ fn serialize_until_segment_end(buffer: &mut String, iter: &mut Peekable<Iter<Tok
     if buffer.is_empty() {
         panic!("An empty segment is not permitted.");
     }
+
+    buffer
 }
 
-pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
+pub fn parse(string: &str) -> HashMap<Symbol, u32> {
     // We have to store the data in this form to allow for
     // term multiplication, see the numeric processing below.
     let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
@@ -164,13 +121,11 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
     // Sanitize any special characters that need to be handled.
     sanitize(&mut chars);
 
-    let tokens: Vec<TokenTypes> = lex_string(&chars);
+    let tokens: Vec<TokenTypes> = tokenizer::tokenize_string(&chars);
     let len = tokens.len();
     if len == 0 {
         return HashMap::new();
     }
-
-    //eprintln!("{:?}", tokens);
 
     let mut buffer = String::new();
 
@@ -188,7 +143,7 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
 
                 buffer.push(*c);
 
-                // Consume until we reach a token of a different type.
+                // Continue until we reach a token of a different type.
                 while let Some(TokenTypes::Digit(d)) =
                     iter.next_if(|&x| matches!(x, TokenTypes::Digit(_)))
                 {
@@ -214,13 +169,12 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
                 }
             }
             TokenTypes::LParen => {
-                buffer.clear();
+                // Serialize until we reach the matching bracket.
+                buffer = serialize_until_matching_paren(&mut iter);
 
-                // Serialize the next data segment.
-                serialize_until_matching_paren(&mut buffer, &mut iter);
-
+                // Recursively parse the serialized string.
                 let mut paran_parsed = Vec::new();
-                for (s, c) in parse2(&buffer) {
+                for (s, c) in parse(&buffer) {
                     paran_parsed.push(SymbolCounter::new(s, c));
                 }
                 stack.push(paran_parsed);
@@ -263,10 +217,10 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
                 segment_start = stack.len();
 
                 // Serialize the next data segment.
-                serialize_until_segment_end(&mut buffer, &mut iter);
+                buffer = serialize_until_segment_end(&mut iter);
 
                 let mut seg_parsed = Vec::new();
-                for (s, c) in parse2(&buffer) {
+                for (s, c) in parse(&buffer) {
                     seg_parsed.push(SymbolCounter::new(s, c));
                 }
                 stack.push(seg_parsed);
@@ -329,4 +283,12 @@ fn sanitize(chars: &mut [char]) {
 
 fn parse_number(str: &str) -> u32 {
     str.parse::<u32>().unwrap()
+}
+
+#[cfg(test)]
+mod tests_parser {
+    use crate::equation_parser::*;
+
+    #[test]
+    fn test_parser() {}
 }
