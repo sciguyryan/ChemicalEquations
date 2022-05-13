@@ -157,7 +157,7 @@ fn serialize_until_segment_end(buffer: &mut String, iter: &mut Peekable<Iter<Tok
 pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
     // We have to store the data in this form to allow for
     // term multiplication, see the numeric processing below.
-    let mut stack: Vec<SymbolCounter> = Vec::new();
+    let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
 
     let mut chars: Vec<char> = string.chars().collect();
 
@@ -219,9 +219,11 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
                 // Serialize the next data segment.
                 serialize_until_matching_paren(&mut buffer, &mut iter);
 
+                let mut paran_parsed = Vec::new();
                 for (s, c) in parse2(&buffer) {
-                    stack.push(SymbolCounter::new(s, c));
+                    paran_parsed.push(SymbolCounter::new(s, c));
                 }
+                stack.push(paran_parsed);
             }
             TokenTypes::RParen => {
                 eprintln!("Unexpected right parenthesis!");
@@ -247,7 +249,7 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
                 if let Ok(symbol) = Symbol::from_str(&buffer) {
                     // Create a new element instance.
                     let element = SymbolCounter::new(symbol, 1);
-                    stack.push(element);
+                    stack.push(vec![element]);
                 } else {
                     panic!("Unrecognized element symbol: {}", &buffer);
                 }
@@ -263,9 +265,11 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
                 // Serialize the next data segment.
                 serialize_until_segment_end(&mut buffer, &mut iter);
 
+                let mut seg_parsed = Vec::new();
                 for (s, c) in parse2(&buffer) {
-                    stack.push(SymbolCounter::new(s, c));
+                    seg_parsed.push(SymbolCounter::new(s, c));
                 }
+                stack.push(seg_parsed);
             }
             _ => {}
         }
@@ -277,9 +281,12 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
     // Do we have a formula segment multiplier?
     apply_segment_multiplier(&mut segment_multiplier, &mut stack[segment_start..]);
 
+    // Now we need to flatten the vector.
+    let flat: Vec<SymbolCounter> = stack.iter().flatten().cloned().collect();
+
     // Finally, we can collect like terms.
-    let mut ret: HashMap<Symbol, u32> = HashMap::new();
-    for item in stack {
+    let mut ret: HashMap<Symbol, u32> = HashMap::with_capacity(flat.len());
+    for item in flat {
         let e = ret.entry(item.symbol).or_insert(0);
         *e += item.count;
     }
@@ -287,22 +294,22 @@ pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
     ret
 }
 
-fn apply_segment_multiplier(mul: &mut u32, stack: &mut [SymbolCounter]) {
+fn apply_segment_multiplier(mul: &mut u32, stack: &mut [Vec<SymbolCounter>]) {
     // Do we have a formula segment multiplier?
     if *mul > 0 {
         // Apply the segment multiplier to the segment.
-        for i in stack.iter_mut() {
-            apply_multiplier(i, *mul);
+        for segment in stack {
+            apply_multiplier(segment, *mul);
         }
 
         *mul = 0;
     }
 }
 
-fn apply_multiplier(v: &mut SymbolCounter, constant: u32) {
-    //eprintln!("{:?}", *v);
-    *v *= constant;
-    //eprintln!("{:?}", *v);
+fn apply_multiplier(slice: &mut [SymbolCounter], constant: u32) {
+    for s in slice {
+        *s *= constant;
+    }
 }
 
 fn sanitize(chars: &mut [char]) {
