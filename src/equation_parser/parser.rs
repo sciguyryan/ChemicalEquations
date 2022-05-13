@@ -1,6 +1,6 @@
 use crate::definitions::enums::Symbol;
 
-use std::{collections::HashMap, ops::MulAssign, str::FromStr};
+use std::{collections::HashMap, iter::Peekable, ops::MulAssign, slice::Iter, str::FromStr};
 
 #[derive(Debug, Clone)]
 pub struct SymbolCounter {
@@ -20,110 +20,185 @@ impl MulAssign<u32> for SymbolCounter {
     }
 }
 
-enum TokenTypes {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum TokenTypes {
     /// Initial token.
     Start,
     /// A numeric character.
-    Number,
+    Digit(char),
     /// A left (opening) parenthesis.
-    LParan,
+    LParen,
     /// A right (closing) parenthesis.
-    RParan,
-    /// The start of an element symbol.
-    ElementHead,
-    /// The (optional) continuation of an element symbol.
-    ElementTail,
-    /// A middot special character.
+    RParen,
+    /// The characters of an element symbol.
+    ElementHead(char),
+    /// The characters of an element symbol.
+    ElementTail(char),
+    /// A mid-dot special character.
     Dot,
-    /// The end of the token stream.
+    /// The end token.
     End,
+}
+
+pub fn lex_string(chars: &[char]) -> Vec<TokenTypes> {
+    let mut tokens: Vec<TokenTypes> = vec![TokenTypes::Start];
+
+    for (i, c) in chars.iter().enumerate() {
+        match c {
+            '(' => {
+                tokens.push(TokenTypes::LParen);
+            }
+            ')' => {
+                tokens.push(TokenTypes::RParen);
+            }
+            '0'..='9' => {
+                tokens.push(TokenTypes::Digit(*c));
+            }
+            'A'..='Z' => {
+                tokens.push(TokenTypes::ElementHead(*c));
+            }
+            'a'..='z' => {
+                tokens.push(TokenTypes::ElementTail(*c));
+            }
+            '.' => {
+                tokens.push(TokenTypes::Dot);
+            }
+            _ => {
+                eprintln!("Invalid character, {}, at index {}", c, i);
+            }
+        }
+    }
+
+    tokens.push(TokenTypes::End);
+
+    tokens
+}
+
+fn serialize_until_matching_paren(buffer: &mut String, iter: &mut Peekable<Iter<TokenTypes>>) {
+    let mut paren_index: usize = 1;
+
+    // Iterate until we reach the end of the segment.
+    // This one is a bit different as we need to locate the matching
+    //   parenthesis. If there is a mismatch, we will panic.
+    while let Some(t) = iter.peek() {
+        match t {
+            TokenTypes::Digit(d) => {
+                buffer.push(*d);
+            }
+            TokenTypes::LParen => {
+                buffer.push('(');
+                paren_index += 1;
+            }
+            TokenTypes::RParen => {
+                paren_index -= 1;
+
+                // We have found the matching parenthesis.
+                if paren_index == 0 {
+                    // We want to skip this parenthesis as it has
+                    // no real value.
+                    iter.next();
+                    break;
+                }
+
+                buffer.push(')');
+            }
+            TokenTypes::ElementHead(e) => {
+                buffer.push(*e);
+            }
+            TokenTypes::ElementTail(e) => {
+                buffer.push(*e);
+            }
+            TokenTypes::Dot => {
+                buffer.push('.');
+            }
+            _ => {}
+        }
+
+        iter.next();
+    }
+
+    if paren_index > 0 {
+        panic!("Error: mismatching parenthesis.");
+    }
+}
+
+fn serialize_until_segment_end(buffer: &mut String, iter: &mut Peekable<Iter<TokenTypes>>) {
+    // Iterate until we reach the end of the segment.
+    while let Some(t) = iter.next_if(|&x| !matches!(x, TokenTypes::Dot)) {
+        match t {
+            TokenTypes::Digit(d) => {
+                buffer.push(*d);
+            }
+            TokenTypes::LParen => {
+                buffer.push('(');
+            }
+            TokenTypes::RParen => {
+                buffer.push(')');
+            }
+            TokenTypes::ElementHead(e) => {
+                buffer.push(*e);
+            }
+            TokenTypes::ElementTail(e) => {
+                buffer.push(*e);
+            }
+            TokenTypes::Dot => {
+                // This will be the start of a new segment.
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if buffer.is_empty() {
+        panic!("An empty segment is not permitted.");
+    }
 }
 
 pub fn parse2(string: &str) -> HashMap<Symbol, u32> {
     // We have to store the data in this form to allow for
     // term multiplication, see the numeric processing below.
-    let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
+    let mut stack: Vec<SymbolCounter> = Vec::new();
 
     let mut chars: Vec<char> = string.chars().collect();
-    let len = chars.len();
 
     // Sanitize any special characters that need to be handled.
     sanitize(&mut chars);
 
-    // Not we need to flatten the vector.
-    let flat: Vec<SymbolCounter> = stack.iter().flatten().cloned().collect();
-
-    // Finally, we can collect like terms.
-    let mut ret: HashMap<Symbol, u32> = HashMap::new();
-    for item in flat {
-        let e = ret.entry(item.symbol).or_insert(0);
-        *e += item.count;
+    let tokens: Vec<TokenTypes> = lex_string(&chars);
+    let len = tokens.len();
+    if len == 0 {
+        return HashMap::new();
     }
 
-    ret
-}
+    //eprintln!("{:?}", tokens);
 
-pub fn parse(string: &str) -> HashMap<Symbol, u32> {
-    // We have to store the data in this form to allow for
-    // term multiplication, see the numeric processing below.
-    let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
+    let mut buffer = String::new();
 
-    let mut chars: Vec<char> = string.chars().collect();
-    let len = chars.len();
-
-    // Sanitize any special characters that need to be handled.
-    sanitize(&mut chars);
-
-    // This will indicate that we are at the end of a segment of
-    // a formula.
-    let mut end_of_segment = false;
+    // The segment will be used to apply segment multipliers.
     let mut segment_multiplier = 0;
-    let mut segment_start_index = 0;
-    let mut segment_end_index = 0;
+    let mut segment_start = 0;
 
-    let mut cursor = 0;
-    while cursor < len {
-        // Get the character at the current position.
-        match chars[cursor] {
-            '(' => {
-                // If we have a matching bracket then we will recursively pass the substring
-                // to ourselves and parse that.
-                if let Some(i) = &chars[cursor..].iter().position(|c| *c == ')') {
-                    // Move past the opening parenthesis.
-                    cursor += 1;
+    let mut iter = tokens.iter().peekable();
 
-                    // The end should be at the character directly before the closing
-                    // bracket.
-                    let end = cursor + i - 1;
+    // Iterate through the tokens.
+    while let Some(t) = iter.next() {
+        match t {
+            TokenTypes::Digit(c) => {
+                buffer.clear();
 
-                    // Push the sub-entries onto the vector.
-                    let str = &chars[cursor..end].iter().cloned().collect::<String>();
-                    println!("{}", str);
-                    let sub_stack: Vec<SymbolCounter> = parse(str)
-                        .into_iter()
-                        .map(|(s, c)| SymbolCounter::new(s, c))
-                        .collect();
+                buffer.push(*c);
 
-                    stack.push(sub_stack);
-
-                    // Move past the closing parenthesis.
-                    cursor = end + 1;
-                } else {
-                    panic!("Error: mismatching parenthesis.");
-                }
-            }
-            '0'..='9' => {
-                // We want to look for the next item that is not a number.
-                let end = if let Some(i) = &chars[cursor..].iter().position(|c| !c.is_ascii_digit())
+                // Consume until we reach a token of a different type.
+                while let Some(TokenTypes::Digit(d)) =
+                    iter.next_if(|&x| matches!(x, TokenTypes::Digit(_)))
                 {
-                    cursor + *i
-                } else {
-                    len
-                };
+                    buffer.push(*d);
+                }
 
-                let number = parse_number(&chars[cursor..end]);
+                let number = parse_number(&buffer);
 
-                // We cannot use 0 as a multiplier within a formula, it's invalid syntax.
+                // We cannot use 0 as a multiplier within a formula,
+                // it's invalid syntax.
                 if number == 0 {
                     panic!("Attempted to apply a zero multiplier");
                 }
@@ -133,99 +208,78 @@ pub fn parse(string: &str) -> HashMap<Symbol, u32> {
                 if let Some(last) = stack.last_mut() {
                     apply_multiplier(last, number);
                 } else {
-                    //panic!("Error: numeric multiplier with no prior term.");
                     // We might be dealing with a formula-specific multiplier.
                     // An example would be calcium sulphate dihydrate: CaSO₄·(H₂O)₂
                     segment_multiplier = number;
                 }
-
-                cursor = end;
             }
-            'A'..='Z' => {
-                let start = cursor;
+            TokenTypes::LParen => {
+                buffer.clear();
 
-                // Move past the opening parenthesis.
-                cursor += 1;
+                // Serialize the next data segment.
+                serialize_until_matching_paren(&mut buffer, &mut iter);
 
-                // We want to look for the next item that is not a lowercase
-                // character.
-                // We always want ensure that the final character is included
-                // in the slice.
-                let end = if let Some(i) =
-                    &chars[cursor..].iter().position(|c| !c.is_ascii_lowercase())
+                for (s, c) in parse2(&buffer) {
+                    stack.push(SymbolCounter::new(s, c));
+                }
+            }
+            TokenTypes::RParen => {
+                eprintln!("Unexpected right parenthesis!");
+            }
+            TokenTypes::ElementHead(c) => {
+                buffer.clear();
+
+                buffer.push(*c);
+
+                /*
+                  We want to continue until we reach the next token that
+                    is -not- part of this symbol.
+                  We therefore need to include successive ElementTail entries,
+                    but nothing else.
+                */
+                while let Some(TokenTypes::ElementTail(e)) =
+                    iter.next_if(|&x| matches!(x, TokenTypes::ElementTail(_)))
                 {
-                    cursor + *i
-                } else {
-                    len - 1
-                };
-
-                let symbol_slice = &chars[start..end];
-                println!("symbol_slice = {:?}", symbol_slice);
-
-                // Next, we need to try and parse the symbol into a Symbols enum
-                // item.
-                let s = symbol_slice.iter().cloned().collect::<String>();
-                if let Ok(symbol) = Symbol::from_str(&s) {
-                    // Create a new element instance.
-                    let element = SymbolCounter::new(symbol, 1);
-                    stack.push(vec![element]);
-                } else {
-                    panic!("Unrecognized element symbol: {}", s);
+                    buffer.push(*e);
                 }
 
-                cursor += symbol_slice.len() - 1;
+                // Is the symbol valid?
+                if let Ok(symbol) = Symbol::from_str(&buffer) {
+                    // Create a new element instance.
+                    let element = SymbolCounter::new(symbol, 1);
+                    stack.push(element);
+                } else {
+                    panic!("Unrecognized element symbol: {}", &buffer);
+                }
             }
-            '.' => {
-                // We have reached the end of a formula segment.
-                end_of_segment = true;
+            TokenTypes::Dot => {
+                // We will treat a mid-dot as though it were a bracketed segment.
+                buffer.clear();
 
-                // The end of this segment is the length of the vector.
-                segment_end_index = stack.len();
+                // Apply any segment multipliers.
+                apply_segment_multiplier(&mut segment_multiplier, &mut stack[segment_start..]);
+                segment_start = stack.len();
 
-                // These can be found in some formulae, they can be skipped.
-                cursor += 1;
+                // Serialize the next data segment.
+                serialize_until_segment_end(&mut buffer, &mut iter);
+
+                for (s, c) in parse2(&buffer) {
+                    stack.push(SymbolCounter::new(s, c));
+                }
             }
-            _ => {
-                panic!("Invalid character, {}, at index {}", chars[cursor], cursor);
-                //cursor += 1;
-            }
-        }
-
-        // If we are at the end of the string, the segment end will be at
-        // whatever the length of the vector currently is.
-        if cursor == len {
-            segment_end_index = stack.len() - 1;
-            end_of_segment = true;
-        }
-
-        // Do we have a formula segment multiplier?
-        if segment_multiplier > 0 && end_of_segment {
-            // Apply the segment multiplier to the segment.
-            for i in stack[segment_start_index..=segment_end_index].iter_mut() {
-                apply_multiplier(i, segment_multiplier);
-            }
-
-            segment_multiplier = 0;
-            segment_start_index = segment_end_index;
-        }
-
-        // This would be invalid syntax, and would result from something like this:
-        // 2
-        // CaSO₄·2
-        if segment_multiplier > 0 && cursor == len {
-            panic!(
-                "Segment multiplier applied with no segment. {} {}",
-                cursor, len
-            );
+            _ => {}
         }
     }
 
-    // Not we need to flatten the vector.
-    let flat: Vec<SymbolCounter> = stack.iter().flatten().cloned().collect();
+    // TODO: decide if I should warn when having an empty stack
+    // TODO: with a multiplier applied.
+
+    // Do we have a formula segment multiplier?
+    apply_segment_multiplier(&mut segment_multiplier, &mut stack[segment_start..]);
 
     // Finally, we can collect like terms.
     let mut ret: HashMap<Symbol, u32> = HashMap::new();
-    for item in flat {
+    for item in stack {
         let e = ret.entry(item.symbol).or_insert(0);
         *e += item.count;
     }
@@ -233,10 +287,22 @@ pub fn parse(string: &str) -> HashMap<Symbol, u32> {
     ret
 }
 
-fn apply_multiplier(vec: &mut [SymbolCounter], constant: u32) {
-    for v in vec.iter_mut() {
-        *v *= constant;
+fn apply_segment_multiplier(mul: &mut u32, stack: &mut [SymbolCounter]) {
+    // Do we have a formula segment multiplier?
+    if *mul > 0 {
+        // Apply the segment multiplier to the segment.
+        for i in stack.iter_mut() {
+            apply_multiplier(i, *mul);
+        }
+
+        *mul = 0;
     }
+}
+
+fn apply_multiplier(v: &mut SymbolCounter, constant: u32) {
+    //eprintln!("{:?}", *v);
+    *v *= constant;
+    //eprintln!("{:?}", *v);
 }
 
 fn sanitize(chars: &mut [char]) {
@@ -254,7 +320,6 @@ fn sanitize(chars: &mut [char]) {
     }
 }
 
-fn parse_number(chars: &[char]) -> u32 {
-    let str: String = chars.iter().collect();
+fn parse_number(str: &str) -> u32 {
     str.parse::<u32>().unwrap()
 }
