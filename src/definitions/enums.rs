@@ -121,6 +121,10 @@ pub enum Symbol {
     Lv,
     Ts,
     Og,
+
+    // Some special case entries.
+    D, // Deuterium
+    T, // Tritium
 }
 
 impl FromStr for Symbol {
@@ -246,6 +250,12 @@ impl FromStr for Symbol {
             "Lv" => Ok(Symbol::Lv),
             "Ts" => Ok(Symbol::Ts),
             "Og" => Ok(Symbol::Og),
+
+            // Some special case entries.
+            "D" => Ok(Symbol::D),
+            "T" => Ok(Symbol::T),
+
+            // Everything else is invalid.
             _ => Err(()),
         }
     }
@@ -371,21 +381,8 @@ enum Elements {
     Livermorium,
     Tennessine,
     Oganesson,
-}
 
-pub struct AllElementData {}
-
-impl AllElementData {}
-
-#[derive(Default)]
-pub struct ElementData {}
-
-impl ElementData {
-    pub fn new() -> Self {
-        let mut e = Self::default();
-        e.initialize();
-        e
-    }
-
-    fn initialize(&mut self) {}
+    // Some special case entries.
+    Deuterium,
+    Tritium,
 }
