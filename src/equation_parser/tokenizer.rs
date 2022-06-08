@@ -51,11 +51,3 @@ pub fn tokenize_string(chars: &[char]) -> Vec<TokenTypes> {
 
     tokens
 }
-
-#[cfg(test)]
-mod tests_tokenizer {
-    use crate::equation_parser::*;
-
-    #[test]
-    fn test_tokenizer() {}
-}

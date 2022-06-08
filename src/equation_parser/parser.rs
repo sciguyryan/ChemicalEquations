@@ -5,7 +5,7 @@ use std::{collections::HashMap, iter::Peekable, ops::MulAssign, slice::Iter, str
 use super::tokenizer::{self, TokenTypes};
 
 #[derive(Debug, Clone)]
-pub struct SymbolCounter {
+struct SymbolCounter {
     pub symbol: Symbol,
     pub count: u32,
 }
@@ -22,6 +22,44 @@ impl MulAssign<u32> for SymbolCounter {
     }
 }
 
+/// Apply a segment multiplier to a specific segment of the parsed formula.
+///
+/// # Arguments
+///
+/// * `stack` - The slice to which the multiplier should be applied.
+/// * `mul` - The multiplier.
+///
+fn apply_multiplier(slice: &mut [SymbolCounter], mul: u32) {
+    for s in slice {
+        *s *= mul;
+    }
+}
+
+/// Apply a segment multiplier to an entire segment of the parsed formula.
+///
+/// # Arguments
+///
+/// * `stack` - The slice to which the multiplier should be applied.
+/// * `mul` - The multiplier.
+///
+fn apply_segment_multiplier(stack: &mut [Vec<SymbolCounter>], mul: &mut u32) {
+    // Do we have a formula segment multiplier?
+    if *mul > 0 {
+        // Apply the segment multiplier to the segment.
+        for segment in stack {
+            apply_multiplier(segment, *mul);
+        }
+
+        *mul = 0;
+    }
+}
+
+/// Serialize a parenthesis segment.
+///
+/// # Arguments
+///
+/// * `iter` - A mutable reference to the [`TokenTypes`] iterator.
+///
 fn serialize_parenthesis(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTypes> {
     let mut tokens = Vec::new();
 
@@ -61,7 +99,13 @@ fn serialize_parenthesis(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenType
     tokens
 }
 
-fn serialize_until_segment_end(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTypes> {
+/// Serialize a formula segment.
+///
+/// # Arguments
+///
+/// * `iter` - A mutable reference to the [`TokenTypes`] iterator.
+///
+fn serialize_segment(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTypes> {
     let mut tokens = Vec::new();
 
     // Iterate until we reach the end of the segment.
@@ -76,6 +120,32 @@ fn serialize_until_segment_end(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<Tok
     tokens
 }
 
+/// Attempt to tokenize and parse an input string.
+///
+/// # Arguments
+///
+/// * `string` - The string slice that should be tokenized.
+///
+pub fn parse(string: &str) -> HashMap<Symbol, u32> {
+    // Sanitize any special characters that need to be handled.
+    let mut chars: Vec<char> = string.chars().collect();
+    sanitize(&mut chars);
+
+    let tokens: Vec<TokenTypes> = tokenizer::tokenize_string(&chars);
+    let len = tokens.len();
+    if len == 0 {
+        return HashMap::new();
+    }
+
+    parse_internal(&tokens)
+}
+
+/// Attempt to parse a token slice.
+///
+/// # Arguments
+///
+/// * `tokens` - A [`TokenTypes`] slice.
+///
 fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
     // We have to store the data in this form to allow for
     // term multiplication, see the numeric processing below.
@@ -161,11 +231,11 @@ fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
             TokenTypes::Dot => {
                 // We will treat a mid-dot as though it were a bracketed segment.
                 // Apply any segment multipliers.
-                apply_segment_multiplier(&mut segment_multiplier, &mut stack[segment_start..]);
+                apply_segment_multiplier(&mut stack[segment_start..], &mut segment_multiplier);
                 segment_start = stack.len();
 
                 // Serialize the next data segment.
-                let segment = serialize_until_segment_end(&mut iter);
+                let segment = serialize_segment(&mut iter);
 
                 let mut seg_parsed = Vec::new();
                 for (s, c) in parse_internal(&segment) {
@@ -184,7 +254,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
     }
 
     // Do we have a formula segment multiplier?
-    apply_segment_multiplier(&mut segment_multiplier, &mut stack[segment_start..]);
+    apply_segment_multiplier(&mut stack[segment_start..], &mut segment_multiplier);
 
     // Now we need to flatten the vector.
     let flat: Vec<SymbolCounter> = stack.iter().flatten().cloned().collect();
@@ -199,38 +269,16 @@ fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
     ret
 }
 
-pub fn parse(string: &str) -> HashMap<Symbol, u32> {
-    // Sanitize any special characters that need to be handled.
-    let mut chars: Vec<char> = string.chars().collect();
-    sanitize(&mut chars);
-
-    let tokens: Vec<TokenTypes> = tokenizer::tokenize_string(&chars);
-    let len = tokens.len();
-    if len == 0 {
-        return HashMap::new();
-    }
-
-    parse_internal(&tokens)
+fn parse_number(str: &str) -> u32 {
+    str.parse::<u32>().unwrap()
 }
 
-fn apply_segment_multiplier(mul: &mut u32, stack: &mut [Vec<SymbolCounter>]) {
-    // Do we have a formula segment multiplier?
-    if *mul > 0 {
-        // Apply the segment multiplier to the segment.
-        for segment in stack {
-            apply_multiplier(segment, *mul);
-        }
-
-        *mul = 0;
-    }
-}
-
-fn apply_multiplier(slice: &mut [SymbolCounter], constant: u32) {
-    for s in slice {
-        *s *= constant;
-    }
-}
-
+/// Sanitize an input string.
+///
+/// # Arguments
+///
+/// * `chars` - A mutable character slice.
+///
 fn sanitize(chars: &mut [char]) {
     for c in chars {
         // Subscript digits have to be normalized into their ASCII equivalents.
@@ -240,14 +288,11 @@ fn sanitize(chars: &mut [char]) {
             *c = char::from_u32(shifted_id).unwrap();
         }
 
+        // Mid-dot characters are replaced with periods.
         if *c == '·' {
             *c = '.';
         }
     }
-}
-
-fn parse_number(str: &str) -> u32 {
-    str.parse::<u32>().unwrap()
 }
 
 #[cfg(test)]
