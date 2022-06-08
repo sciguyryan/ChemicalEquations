@@ -22,16 +22,6 @@ fn main() {
     }
     let elapsed = now.elapsed();
     println!("Elapsed: {:.2?}", elapsed / cycles);
-
-    let now = Instant::now();
-    {
-        for i in 0..cycles {
-            let r = parser_v3::parse(formula);
-            print_sorted(r);
-        }
-    }
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed / cycles);
 }
 
 fn print_sorted(map: HashMap<Symbol, u32>) {
