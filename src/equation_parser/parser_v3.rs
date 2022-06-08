@@ -22,7 +22,7 @@ impl MulAssign<u32> for SymbolCounter {
     }
 }
 
-fn serialize_paren_segment(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTypes> {
+fn serialize_parenthesis(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTypes> {
     let mut tokens = Vec::new();
 
     // The counter to indicate the depth of the parenthesis.
@@ -33,11 +33,7 @@ fn serialize_paren_segment(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTy
     //   parenthesis. If there is a mismatch, we will panic.
     while let Some(t) = iter.peek() {
         match t {
-            TokenTypes::Digit(_) => {
-                tokens.push(**t);
-            }
             TokenTypes::LParen => {
-                tokens.push(**t);
                 paren_index += 1;
             }
             TokenTypes::RParen => {
@@ -50,14 +46,11 @@ fn serialize_paren_segment(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTy
                     iter.next();
                     break;
                 }
-
-                tokens.push(**t);
             }
-            _ => {
-                tokens.push(**t);
-            }
+            _ => {}
         }
 
+        tokens.push(**t);
         iter.next();
     }
 
@@ -73,15 +66,7 @@ fn serialize_until_segment_end(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<Tok
 
     // Iterate until we reach the end of the segment.
     while let Some(t) = iter.next_if(|&x| !matches!(x, TokenTypes::Dot)) {
-        match t {
-            TokenTypes::Dot => {
-                // This will be the start of a new segment.
-                break;
-            }
-            _ => {
-                tokens.push(*t);
-            }
-        }
+        tokens.push(*t);
     }
 
     if tokens.is_empty() {
@@ -136,7 +121,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
             }
             TokenTypes::LParen => {
                 // Serialize until we reach the matching bracket.
-                let segment = serialize_paren_segment(&mut iter);
+                let segment = serialize_parenthesis(&mut iter);
 
                 // Recursively parse the serialized string.
                 let mut paran_parsed = Vec::new();
@@ -146,7 +131,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
                 stack.push(paran_parsed);
             }
             TokenTypes::RParen => {
-                eprintln!("Unexpected right parenthesis!");
+                panic!("Unexpected right parenthesis!");
             }
             TokenTypes::ElementHead(c) => {
                 let mut buffer = String::with_capacity(3);
@@ -194,6 +179,9 @@ fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
 
     // TODO: decide if I should warn when having an empty stack
     // TODO: with a multiplier applied.
+    if stack.is_empty() && segment_multiplier > 0 {
+        panic!("Segment multiplier applied with no segment.");
+    }
 
     // Do we have a formula segment multiplier?
     apply_segment_multiplier(&mut segment_multiplier, &mut stack[segment_start..]);
@@ -264,8 +252,144 @@ fn parse_number(str: &str) -> u32 {
 
 #[cfg(test)]
 mod tests_parser {
-    use crate::equation_parser::*;
+    use crate::{definitions::enums::Symbol, equation_parser::*};
+
+    use std::collections::HashMap;
+
+    struct TestEntry<'a> {
+        input: &'a str,
+        result: HashMap<Symbol, u32>,
+    }
+
+    impl TestEntry<'_> {
+        pub fn new(input: &str, outputs: Vec<(Symbol, u32)>) -> TestEntry {
+            let mut e = TestEntry {
+                input,
+                result: HashMap::new(),
+            };
+
+            for output in outputs {
+                e.result.insert(output.0, output.1);
+            }
+
+            e
+        }
+    }
 
     #[test]
-    fn test_parser() {}
+    fn test_parser_valid_formulae() {
+        let tests = [
+            // Basic formulae.
+            TestEntry::new("H", vec![(Symbol::H, 1)]),
+            TestEntry::new("H2", vec![(Symbol::H, 2)]),
+            TestEntry::new("H2Ca", vec![(Symbol::H, 2), (Symbol::Ca, 1)]),
+            TestEntry::new("HCa", vec![(Symbol::H, 1), (Symbol::Ca, 1)]),
+            TestEntry::new("2HCa", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
+            // Bracketed formulae.
+            TestEntry::new("(H2Ca2)", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
+            TestEntry::new("2(HCa)", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
+            TestEntry::new("2(H2Ca)", vec![(Symbol::H, 4), (Symbol::Ca, 2)]),
+            TestEntry::new("2(H2Ca2)", vec![(Symbol::H, 4), (Symbol::Ca, 4)]),
+            TestEntry::new("2(H2Ca2)2", vec![(Symbol::H, 8), (Symbol::Ca, 8)]),
+            TestEntry::new("(H2Ca2)2", vec![(Symbol::H, 4), (Symbol::Ca, 4)]),
+            // Segmented formulae.
+            TestEntry::new(
+                "(H2Ca2)·O2",
+                vec![(Symbol::H, 2), (Symbol::Ca, 2), (Symbol::O, 2)],
+            ),
+            TestEntry::new(
+                "2(H2Ca2)·O2",
+                vec![(Symbol::H, 4), (Symbol::Ca, 4), (Symbol::O, 2)],
+            ),
+            TestEntry::new(
+                "H2Ca2·O2",
+                vec![(Symbol::H, 2), (Symbol::Ca, 2), (Symbol::O, 2)],
+            ),
+            TestEntry::new(
+                "H2Ca2·2O2",
+                vec![(Symbol::H, 2), (Symbol::Ca, 2), (Symbol::O, 4)],
+            ),
+            TestEntry::new(
+                "2H2Ca2·2O2",
+                vec![(Symbol::H, 4), (Symbol::Ca, 4), (Symbol::O, 4)],
+            ),
+            TestEntry::new(
+                "2H2Ca2·2O2·U2",
+                vec![
+                    (Symbol::H, 4),
+                    (Symbol::Ca, 4),
+                    (Symbol::O, 4),
+                    (Symbol::U, 2),
+                ],
+            ),
+            TestEntry::new("((H2Ca2))", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
+            TestEntry::new("((H2)(Ca2))", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
+            // Torture tests.
+            TestEntry::new(
+                "(Zn2(Ca(BrO4))K(Pb)2Rb)3",
+                vec![
+                    (Symbol::O, 12),
+                    (Symbol::K, 3),
+                    (Symbol::Ca, 3),
+                    (Symbol::Zn, 6),
+                    (Symbol::Br, 3),
+                    (Symbol::Rb, 3),
+                    (Symbol::Pb, 6),
+                ],
+            ),
+            TestEntry::new(
+                "C228H236F72N12O30P12",
+                vec![
+                    (Symbol::C, 228),
+                    (Symbol::H, 236),
+                    (Symbol::F, 72),
+                    (Symbol::N, 12),
+                    (Symbol::O, 30),
+                    (Symbol::P, 12),
+                ],
+            ),
+            // Formulae with subscript unicode characters.
+            TestEntry::new("H₂", vec![(Symbol::H, 2)]),
+            TestEntry::new("H₂O2", vec![(Symbol::H, 2), (Symbol::O, 2)]),
+        ];
+
+        for (i, test) in tests.into_iter().enumerate() {
+            let r = parser_v3::parse(test.input);
+
+            assert_eq!(
+                r, test.result,
+                "Failed to correctly parse valid formulae test {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_parser_invalid_formulae() {
+        // Note, we don't care about the results here as these should fail.
+        let tests = [
+            // Mismatched brackets.
+            TestEntry::new("(", vec![]),
+            TestEntry::new("())", vec![]),
+            TestEntry::new("(()", vec![]),
+            // Invalid segments.
+            TestEntry::new("·", vec![]),
+            TestEntry::new("·H", vec![]),
+            TestEntry::new("H·", vec![]),
+            // Multiplier with no terms.
+            TestEntry::new("2", vec![]),
+            // Invalid symbol.
+            TestEntry::new("Zz", vec![]),
+        ];
+
+        for (i, test) in tests.into_iter().enumerate() {
+            let result = std::panic::catch_unwind(|| parser_v3::parse(test.input));
+            assert!(
+                result.is_err(),
+                "Failed to panic with invalid formulae test {}",
+                i
+            );
+        }
+    }
 }

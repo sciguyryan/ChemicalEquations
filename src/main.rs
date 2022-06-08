@@ -8,7 +8,7 @@ use definitions::enums::Symbol;
 use crate::equation_parser::*;
 
 fn main() {
-    let formula = "CaSO₄·2(H₂O)₂·2U2"; // (Zn2(Ca(BrO4))K(Pb)2Rb)3
+    let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3"; // CaSO₄·2(H₂O)₂·2U2
 
     let cycles = 1;
 
