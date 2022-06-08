@@ -8,7 +8,7 @@ use definitions::enums::Symbol;
 use crate::equation_parser::*;
 
 fn main() {
-    let formula = "(CO2)3"; // CaSO₄·2(H₂O)₂·2U2·
+    let formula = "CaSO₄·2(H₂O)₂·2U2"; // (Zn2(Ca(BrO4))K(Pb)2Rb)3
 
     let cycles = 1;
 
@@ -21,17 +21,17 @@ fn main() {
         }
     }
     let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
+    println!("Elapsed: {:.2?}", elapsed / cycles);
 
-    /*let now = Instant::now();
+    let now = Instant::now();
     {
         for i in 0..cycles {
-            let r = parser::parse3(formula);
+            let r = parser_v3::parse(formula);
             print_sorted(r);
         }
     }
     let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);*/
+    println!("Elapsed: {:.2?}", elapsed / cycles);
 }
 
 fn print_sorted(map: HashMap<Symbol, u32>) {

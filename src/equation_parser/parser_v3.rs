@@ -22,8 +22,8 @@ impl MulAssign<u32> for SymbolCounter {
     }
 }
 
-fn serialize_until_matching_paren(iter: &mut Peekable<Iter<TokenTypes>>) -> String {
-    let mut buffer = String::new();
+fn serialize_paren_segment(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTypes> {
+    let mut tokens = Vec::new();
 
     // The counter to indicate the depth of the parenthesis.
     let mut paren_index: usize = 1;
@@ -33,11 +33,11 @@ fn serialize_until_matching_paren(iter: &mut Peekable<Iter<TokenTypes>>) -> Stri
     //   parenthesis. If there is a mismatch, we will panic.
     while let Some(t) = iter.peek() {
         match t {
-            TokenTypes::Digit(d) => {
-                buffer.push(*d);
+            TokenTypes::Digit(_) => {
+                tokens.push(**t);
             }
             TokenTypes::LParen => {
-                buffer.push('(');
+                tokens.push(**t);
                 paren_index += 1;
             }
             TokenTypes::RParen => {
@@ -51,18 +51,11 @@ fn serialize_until_matching_paren(iter: &mut Peekable<Iter<TokenTypes>>) -> Stri
                     break;
                 }
 
-                buffer.push(')');
+                tokens.push(**t);
             }
-            TokenTypes::ElementHead(e) => {
-                buffer.push(*e);
+            _ => {
+                tokens.push(**t);
             }
-            TokenTypes::ElementTail(e) => {
-                buffer.push(*e);
-            }
-            TokenTypes::Dot => {
-                buffer.push('.');
-            }
-            _ => {}
         }
 
         iter.next();
@@ -72,61 +65,36 @@ fn serialize_until_matching_paren(iter: &mut Peekable<Iter<TokenTypes>>) -> Stri
         panic!("Error: mismatching parenthesis.");
     }
 
-    buffer
+    tokens
 }
 
-fn serialize_until_segment_end(iter: &mut Peekable<Iter<TokenTypes>>) -> String {
-    let mut buffer = String::new();
+fn serialize_until_segment_end(iter: &mut Peekable<Iter<TokenTypes>>) -> Vec<TokenTypes> {
+    let mut tokens = Vec::new();
 
     // Iterate until we reach the end of the segment.
     while let Some(t) = iter.next_if(|&x| !matches!(x, TokenTypes::Dot)) {
         match t {
-            TokenTypes::Digit(d) => {
-                buffer.push(*d);
-            }
-            TokenTypes::LParen => {
-                buffer.push('(');
-            }
-            TokenTypes::RParen => {
-                buffer.push(')');
-            }
-            TokenTypes::ElementHead(e) => {
-                buffer.push(*e);
-            }
-            TokenTypes::ElementTail(e) => {
-                buffer.push(*e);
-            }
             TokenTypes::Dot => {
                 // This will be the start of a new segment.
                 break;
             }
-            _ => {}
+            _ => {
+                tokens.push(*t);
+            }
         }
     }
 
-    if buffer.is_empty() {
+    if tokens.is_empty() {
         panic!("An empty segment is not permitted.");
     }
 
-    buffer
+    tokens
 }
 
-pub fn parse(string: &str) -> HashMap<Symbol, u32> {
+fn parse_internal(tokens: &[TokenTypes]) -> HashMap<Symbol, u32> {
     // We have to store the data in this form to allow for
     // term multiplication, see the numeric processing below.
     let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
-
-    // Sanitize any special characters that need to be handled.
-    let mut chars: Vec<char> = string.chars().collect();
-    sanitize(&mut chars);
-
-    let tokens: Vec<TokenTypes> = tokenizer::tokenize_string(&chars);
-    let len = tokens.len();
-    if len == 0 {
-        return HashMap::new();
-    }
-
-    let mut buffer = String::new();
 
     // The segment will be used to apply segment multipliers.
     let mut segment_multiplier = 0;
@@ -138,8 +106,7 @@ pub fn parse(string: &str) -> HashMap<Symbol, u32> {
     while let Some(t) = iter.next() {
         match t {
             TokenTypes::Digit(c) => {
-                buffer.clear();
-
+                let mut buffer = String::with_capacity(20);
                 buffer.push(*c);
 
                 // Continue until we reach a token of a different type.
@@ -169,11 +136,11 @@ pub fn parse(string: &str) -> HashMap<Symbol, u32> {
             }
             TokenTypes::LParen => {
                 // Serialize until we reach the matching bracket.
-                buffer = serialize_until_matching_paren(&mut iter);
+                let segment = serialize_paren_segment(&mut iter);
 
                 // Recursively parse the serialized string.
                 let mut paran_parsed = Vec::new();
-                for (s, c) in parse(&buffer) {
+                for (s, c) in parse_internal(&segment) {
                     paran_parsed.push(SymbolCounter::new(s, c));
                 }
                 stack.push(paran_parsed);
@@ -182,8 +149,7 @@ pub fn parse(string: &str) -> HashMap<Symbol, u32> {
                 eprintln!("Unexpected right parenthesis!");
             }
             TokenTypes::ElementHead(c) => {
-                buffer.clear();
-
+                let mut buffer = String::with_capacity(3);
                 buffer.push(*c);
 
                 /*
@@ -209,17 +175,15 @@ pub fn parse(string: &str) -> HashMap<Symbol, u32> {
             }
             TokenTypes::Dot => {
                 // We will treat a mid-dot as though it were a bracketed segment.
-                buffer.clear();
-
                 // Apply any segment multipliers.
                 apply_segment_multiplier(&mut segment_multiplier, &mut stack[segment_start..]);
                 segment_start = stack.len();
 
                 // Serialize the next data segment.
-                buffer = serialize_until_segment_end(&mut iter);
+                let segment = serialize_until_segment_end(&mut iter);
 
                 let mut seg_parsed = Vec::new();
-                for (s, c) in parse(&buffer) {
+                for (s, c) in parse_internal(&segment) {
                     seg_parsed.push(SymbolCounter::new(s, c));
                 }
                 stack.push(seg_parsed);
@@ -245,6 +209,20 @@ pub fn parse(string: &str) -> HashMap<Symbol, u32> {
     }
 
     ret
+}
+
+pub fn parse(string: &str) -> HashMap<Symbol, u32> {
+    // Sanitize any special characters that need to be handled.
+    let mut chars: Vec<char> = string.chars().collect();
+    sanitize(&mut chars);
+
+    let tokens: Vec<TokenTypes> = tokenizer::tokenize_string(&chars);
+    let len = tokens.len();
+    if len == 0 {
+        return HashMap::new();
+    }
+
+    parse_internal(&tokens)
 }
 
 fn apply_segment_multiplier(mul: &mut u32, stack: &mut [Vec<SymbolCounter>]) {
