@@ -8,16 +8,18 @@ use definitions::enums::Symbol;
 use crate::equation_parser::*;
 
 fn main() {
-    let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3"; // CaSO₄·2(H₂O)₂·2U2
+    let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3·2(H₂O)₂·2U2"; // CaSO₄·2(H₂O)₂·2U2
 
-    let cycles = 1;
+    let cycles = 100000;
 
     use std::time::Instant;
     let now = Instant::now();
     {
-        for i in 0..cycles {
+        for _ in 0..cycles {
             let r = parser::parse(formula);
-            print_sorted(r);
+            /*if let Ok(parsed) = r {
+                print_sorted(parsed);
+            }*/
         }
     }
     let elapsed = now.elapsed();
