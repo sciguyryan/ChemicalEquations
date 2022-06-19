@@ -4,6 +4,8 @@ use std::str::FromStr;
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Symbol {
     H,
+    D, // Deuterium
+    T, // Tritium
     He,
     Li,
     Be,
@@ -121,10 +123,6 @@ pub enum Symbol {
     Lv,
     Ts,
     Og,
-
-    // Some special case entries.
-    D, // Deuterium
-    T, // Tritium
 }
 
 impl FromStr for Symbol {
@@ -133,6 +131,8 @@ impl FromStr for Symbol {
     fn from_str(input: &str) -> Result<Symbol, Self::Err> {
         match input {
             "H" => Ok(Symbol::H),
+            "D" => Ok(Symbol::D),
+            "T" => Ok(Symbol::T),
             "He" => Ok(Symbol::He),
             "Li" => Ok(Symbol::Li),
             "Be" => Ok(Symbol::Be),
@@ -251,10 +251,6 @@ impl FromStr for Symbol {
             "Ts" => Ok(Symbol::Ts),
             "Og" => Ok(Symbol::Og),
 
-            // Some special case entries.
-            "D" => Ok(Symbol::D),
-            "T" => Ok(Symbol::T),
-
             // Everything else is invalid.
             _ => Err(()),
         }
@@ -264,6 +260,8 @@ impl FromStr for Symbol {
 #[allow(unused)]
 enum Elements {
     Hydrogen,
+    Deuterium,
+    Tritium,
     Helium,
     Lithium,
     Beryllium,
@@ -381,8 +379,4 @@ enum Elements {
     Livermorium,
     Tennessine,
     Oganesson,
-
-    // Some special case entries.
-    Deuterium,
-    Tritium,
 }

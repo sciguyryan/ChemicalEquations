@@ -182,7 +182,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<Symbol, u32>> {
                 }
 
                 // Next, we need to apply this multiplier to the last item
-                // in the stack. If there is no prior item, then this is an error.
+                // in the stack.
                 if let Some(last) = stack.last_mut() {
                     apply_multiplier(last, number);
                 } else {

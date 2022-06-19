@@ -1,10 +1,11 @@
-
-pub struct AllElementData {}
-
-impl AllElementData {}
+use super::enums::*;
 
 #[derive(Default)]
-pub struct ElementData {}
+pub struct ElementData {
+    pub symbol: String,
+    pub name: String,
+    pub atomic_weight: f32
+}
 
 impl ElementData {
     pub fn new() -> Self {
@@ -14,4 +15,13 @@ impl ElementData {
     }
 
     fn initialize(&mut self) {}
+}
+
+pub struct AllElementData {
+    pub data: HashMap<Symbol, ElementData>
+}
+
+impl AllElementData {
+    pub fn new() -> Self {
+    }
 }
