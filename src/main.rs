@@ -1,20 +1,19 @@
 mod definitions;
 mod equation_parser;
 
-use rusqlite::{Connection, Result};
 use std::collections::HashMap;
 
 use definitions::enums::Symbol;
 
+use crate::definitions::element_data;
 use crate::equation_parser::*;
 
 fn main() {
-    let conn = Connection::open("data.db");
-    eprintln!("{:?}", conn);
+   eprintln!("{}", element_data::ELEMENT_DATA.data.len());
 
     let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3·2(H₂O)₂·2U2"; // CaSO₄·2(H₂O)₂·2U2
 
-    let cycles = 100000;
+    let cycles = 1;
 
     use std::time::Instant;
     let now = Instant::now();
