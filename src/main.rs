@@ -3,10 +3,7 @@ mod equation_parser;
 
 use std::collections::HashMap;
 
-use definitions::enums::Symbol;
-
-use crate::definitions::element_data;
-use crate::equation_parser::*;
+use crate::{definitions::element_data, equation_parser::*};
 
 fn main() {
    eprintln!("{}", element_data::ELEMENT_DATA.data.len());
@@ -29,7 +26,7 @@ fn main() {
     println!("Elapsed: {:.2?}", elapsed / cycles);
 }
 
-fn print_sorted(map: HashMap<Symbol, u32>) {
+fn print_sorted(map: HashMap<String, u32>) {
     let mut v: Vec<_> = map.into_iter().collect();
     v.sort_by(|x, y| x.0.cmp(&y.0));
 

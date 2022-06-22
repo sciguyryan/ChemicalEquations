@@ -1,6 +1,6 @@
-use crate::definitions::enums::Symbol;
+use crate::definitions::element_data;
 
-use std::{collections::HashMap, iter::Peekable, ops::MulAssign, slice::Iter, str::FromStr};
+use std::{collections::HashMap, iter::Peekable, ops::MulAssign, slice::Iter};
 
 use super::{
     error::{ParserError, Result},
@@ -9,12 +9,12 @@ use super::{
 
 #[derive(Debug, Clone)]
 struct SymbolCounter {
-    pub symbol: Symbol,
+    pub symbol: String,
     pub count: u32,
 }
 
 impl SymbolCounter {
-    pub fn new(symbol: Symbol, count: u32) -> Self {
+    pub fn new(symbol: String, count: u32) -> Self {
         Self { symbol, count }
     }
 }
@@ -129,7 +129,7 @@ fn serialize_segment(iter: &mut Peekable<Iter<TokenTypes>>) -> Result<Vec<TokenT
 ///
 /// * `string` - The string slice that should be tokenized.
 ///
-pub fn parse(string: &str) -> Result<HashMap<Symbol, u32>> {
+pub fn parse(string: &str) -> Result<HashMap<String, u32>> {
     // Sanitize any special characters that need to be handled.
     let mut chars: Vec<char> = string.chars().collect();
     sanitize(&mut chars);
@@ -148,7 +148,7 @@ pub fn parse(string: &str) -> Result<HashMap<Symbol, u32>> {
 ///
 /// * `tokens` - A [`TokenTypes`] slice.
 ///
-fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<Symbol, u32>> {
+fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<String, u32>> {
     // We have to store the data in this form to allow for
     // term multiplication, see the numeric processing below.
     let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
@@ -222,9 +222,9 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<Symbol, u32>> {
                 }
 
                 // Is the symbol valid?
-                if let Ok(symbol) = Symbol::from_str(&buffer) {
+                if element_data::ELEMENT_DATA.data.contains_key(&buffer) {
                     // Create a new element instance.
-                    let element = SymbolCounter::new(symbol, 1);
+                    let element = SymbolCounter::new(buffer, 1);
                     stack.push(vec![element]);
                 } else {
                     return Err(ParserError::UnrecognizedSymbol);
@@ -261,7 +261,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<Symbol, u32>> {
     let flat: Vec<SymbolCounter> = stack.iter().flatten().cloned().collect();
 
     // Finally, we can collect like terms.
-    let mut ret: HashMap<Symbol, u32> = HashMap::with_capacity(flat.len());
+    let mut ret: HashMap<String, u32> = HashMap::with_capacity(flat.len());
     for item in flat {
         let e = ret.entry(item.symbol).or_insert(0);
         *e += item.count;
@@ -298,20 +298,17 @@ fn sanitize(chars: &mut [char]) {
 
 #[cfg(test)]
 mod tests_parser {
-    use crate::{
-        definitions::enums::Symbol,
-        equation_parser::{error::ParserError, *},
-    };
+    use crate::equation_parser::{error::ParserError, *};
 
     use std::collections::HashMap;
 
     struct TestEntryOk<'a> {
         input: &'a str,
-        result: HashMap<Symbol, u32>,
+        result: HashMap<String, u32>,
     }
 
     impl TestEntryOk<'_> {
-        pub fn new(input: &str, outputs: Vec<(Symbol, u32)>) -> TestEntryOk {
+        pub fn new(input: &str, outputs: Vec<(String, u32)>) -> TestEntryOk {
             let mut e = TestEntryOk {
                 input,
                 result: HashMap::new(),
@@ -340,77 +337,77 @@ mod tests_parser {
     fn test_parser_valid_formulae() {
         let tests = [
             // Basic formulae.
-            TestEntryOk::new("H", vec![(Symbol::H, 1)]),
-            TestEntryOk::new("H2", vec![(Symbol::H, 2)]),
-            TestEntryOk::new("H2Ca", vec![(Symbol::H, 2), (Symbol::Ca, 1)]),
-            TestEntryOk::new("HCa", vec![(Symbol::H, 1), (Symbol::Ca, 1)]),
-            TestEntryOk::new("2HCa", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
+            TestEntryOk::new("H", vec![("H".to_string(), 1)]),
+            TestEntryOk::new("H2", vec![("H".to_string(), 2)]),
+            TestEntryOk::new("H2Ca", vec![("H".to_string(), 2), ("Ca".to_string(), 1)]),
+            TestEntryOk::new("HCa", vec![("H".to_string(), 1), ("Ca".to_string(), 1)]),
+            TestEntryOk::new("2HCa", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
             // Bracketed formulae.
-            TestEntryOk::new("(H2Ca2)", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
-            TestEntryOk::new("2(HCa)", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
-            TestEntryOk::new("2(H2Ca)", vec![(Symbol::H, 4), (Symbol::Ca, 2)]),
-            TestEntryOk::new("2(H2Ca2)", vec![(Symbol::H, 4), (Symbol::Ca, 4)]),
-            TestEntryOk::new("2(H2Ca2)2", vec![(Symbol::H, 8), (Symbol::Ca, 8)]),
-            TestEntryOk::new("(H2Ca2)2", vec![(Symbol::H, 4), (Symbol::Ca, 4)]),
+            TestEntryOk::new("(H2Ca2)", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
+            TestEntryOk::new("2(HCa)", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
+            TestEntryOk::new("2(H2Ca)", vec![("H".to_string(), 4), ("Ca".to_string(), 2)]),
+            TestEntryOk::new("2(H2Ca2)", vec![("H".to_string(), 4), ("Ca".to_string(), 4)]),
+            TestEntryOk::new("2(H2Ca2)2", vec![("H".to_string(), 8), ("Ca".to_string(), 8)]),
+            TestEntryOk::new("(H2Ca2)2", vec![("H".to_string(), 4), ("Ca".to_string(), 4)]),
             // Segmented formulae.
             TestEntryOk::new(
                 "(H2Ca2)·O2",
-                vec![(Symbol::H, 2), (Symbol::Ca, 2), (Symbol::O, 2)],
+                vec![("H".to_string(), 2), ("Ca".to_string(), 2), ("O".to_string(), 2)],
             ),
             TestEntryOk::new(
                 "2(H2Ca2)·O2",
-                vec![(Symbol::H, 4), (Symbol::Ca, 4), (Symbol::O, 2)],
+                vec![("H".to_string(), 4), ("Ca".to_string(), 4), ("O".to_string(), 2)],
             ),
             TestEntryOk::new(
                 "H2Ca2·O2",
-                vec![(Symbol::H, 2), (Symbol::Ca, 2), (Symbol::O, 2)],
+                vec![("H".to_string(), 2), ("Ca".to_string(), 2), ("O".to_string(), 2)],
             ),
             TestEntryOk::new(
                 "H2Ca2·2O2",
-                vec![(Symbol::H, 2), (Symbol::Ca, 2), (Symbol::O, 4)],
+                vec![("H".to_string(), 2), ("Ca".to_string(), 2), ("O".to_string(), 4)],
             ),
             TestEntryOk::new(
                 "2H2Ca2·2O2",
-                vec![(Symbol::H, 4), (Symbol::Ca, 4), (Symbol::O, 4)],
+                vec![("H".to_string(), 4), ("Ca".to_string(), 4), ("O".to_string(), 4)],
             ),
             TestEntryOk::new(
                 "2H2Ca2·2O2·U2",
                 vec![
-                    (Symbol::H, 4),
-                    (Symbol::Ca, 4),
-                    (Symbol::O, 4),
-                    (Symbol::U, 2),
+                    ("H".to_string(), 4),
+                    ("Ca".to_string(), 4),
+                    ("O".to_string(), 4),
+                    ("U".to_string(), 2),
                 ],
             ),
-            TestEntryOk::new("((H2Ca2))", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
-            TestEntryOk::new("((H2)(Ca2))", vec![(Symbol::H, 2), (Symbol::Ca, 2)]),
+            TestEntryOk::new("((H2Ca2))", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
+            TestEntryOk::new("((H2)(Ca2))", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
             // Torture tests.
             TestEntryOk::new(
                 "(Zn2(Ca(BrO4))K(Pb)2Rb)3",
                 vec![
-                    (Symbol::O, 12),
-                    (Symbol::K, 3),
-                    (Symbol::Ca, 3),
-                    (Symbol::Zn, 6),
-                    (Symbol::Br, 3),
-                    (Symbol::Rb, 3),
-                    (Symbol::Pb, 6),
+                    ("O".to_string(), 12),
+                    ("K".to_string(), 3),
+                    ("Ca".to_string(), 3),
+                    ("Zn".to_string(), 6),
+                    ("Br".to_string(), 3),
+                    ("Rb".to_string(), 3),
+                    ("Pb".to_string(), 6),
                 ],
             ),
             TestEntryOk::new(
                 "C228H236F72N12O30P12",
                 vec![
-                    (Symbol::C, 228),
-                    (Symbol::H, 236),
-                    (Symbol::F, 72),
-                    (Symbol::N, 12),
-                    (Symbol::O, 30),
-                    (Symbol::P, 12),
+                    ("C".to_string(), 228),
+                    ("H".to_string(), 236),
+                    ("F".to_string(), 72),
+                    ("N".to_string(), 12),
+                    ("O".to_string(), 30),
+                    ("P".to_string(), 12),
                 ],
             ),
             // Formulae with subscript unicode characters.
-            TestEntryOk::new("H₂", vec![(Symbol::H, 2)]),
-            TestEntryOk::new("H₂O2", vec![(Symbol::H, 2), (Symbol::O, 2)]),
+            TestEntryOk::new("H₂", vec![("H".to_string(), 2)]),
+            TestEntryOk::new("H₂O2", vec![("H".to_string(), 2), ("O".to_string(), 2)]),
         ];
 
         for (i, test) in tests.into_iter().enumerate() {
