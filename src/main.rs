@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::{definitions::element_data, equation_parser::*};
 
 fn main() {
-   eprintln!("{}", element_data::ELEMENT_DATA.data.len());
+    eprintln!("{}", element_data::ELEMENT_DATA.data.len());
 
     let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3·2(H₂O)₂·2U2"; // CaSO₄·2(H₂O)₂·2U2
 

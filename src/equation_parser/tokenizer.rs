@@ -12,8 +12,10 @@ pub enum TokenTypes {
     ElementHead(char),
     /// The characters of an element symbol.
     ElementTail(char),
-    /// A mid-dot special character.
+    /// A middle dot special character.
     Dot,
+    /// A mid-dot special character.
+    ChargeSign(char),
     /// The end token.
     End,
 }
@@ -37,6 +39,12 @@ pub fn tokenize_string(chars: &[char]) -> Vec<TokenTypes> {
             }
             'a'..='z' => {
                 tokens.push(TokenTypes::ElementTail(*c));
+            }
+            '+' => {
+                tokens.push(TokenTypes::ChargeSign('+'));
+            }
+            '-' => {
+                tokens.push(TokenTypes::ChargeSign('-'));
             }
             '.' => {
                 tokens.push(TokenTypes::Dot);

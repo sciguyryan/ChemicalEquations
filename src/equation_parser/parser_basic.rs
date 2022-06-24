@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use super::{
     error::{ParserError, Result},
+    parser_result::ParserResult,
     symbol_counter::SymbolCounter,
     tokenizer::{self, TokenTypes},
     utils::*,
@@ -15,14 +16,14 @@ use super::{
 ///
 /// * `string` - The string slice that should be tokenized.
 ///
-pub fn parse(string: &str) -> Result<HashMap<String, u32>> {
+pub fn parse(string: &str) -> Result<ParserResult> {
     // Sanitize any special characters that need to be handled.
     let mut chars: Vec<char> = string.chars().collect();
     sanitize(&mut chars);
 
     let tokens: Vec<TokenTypes> = tokenizer::tokenize_string(&chars);
     if tokens.is_empty() {
-        return Ok(HashMap::new());
+        return Ok(ParserResult::new());
     }
 
     parse_internal(&tokens)
@@ -34,14 +35,13 @@ pub fn parse(string: &str) -> Result<HashMap<String, u32>> {
 ///
 /// * `tokens` - A [`TokenTypes`] slice.
 ///
-fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<String, u32>> {
+fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
     // We have to store the data in this form to allow for
     // term multiplication, see the numeric processing below.
     let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
 
     // The segment will be used to apply segment multipliers.
-    let mut segment_multiplier = 0;
-    let mut segment_start = 0;
+    let mut charge: i32 = 0;
 
     let mut iter = tokens.iter().peekable();
 
@@ -59,6 +59,36 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<String, u32>> {
                     buffer.push(*d);
                 }
 
+                // Is the next token a charge sign?
+                if let Some(TokenTypes::ChargeSign(c)) = iter.peek() {
+                    // Yes, we have to handle a charge here.
+                    iter.next();
+
+                    // Charges may only occur at the end of a formula.
+                    if iter.peek().is_some() {
+                        return Err(ParserError::InvalidCharge);
+                    }
+
+                    // The prior digit is the charge for this formula.
+                    let charge_digit = buffer.pop().unwrap().to_string();
+                    charge = parse_number(&charge_digit) as i32;
+
+                    // We cannot use 0 as a charge, it's invalid syntax.
+                    if charge == 0 {
+                        return Err(ParserError::InvalidCharge);
+                    }
+
+                    // If the sign is negative then we need to invert the sign.
+                    if *c == '-' {
+                        charge *= -1;
+                    }
+
+                    // Is there still a multiplier number to parse?
+                    if buffer.is_empty() {
+                        continue;
+                    }
+                }
+
                 let number = parse_number(&buffer);
 
                 // We cannot use 0 as a multiplier within a formula,
@@ -72,9 +102,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<String, u32>> {
                 if let Some(last) = stack.last_mut() {
                     apply_multiplier(last, number);
                 } else {
-                    // We might be dealing with a formula-specific multiplier.
-                    // An example would be calcium sulphate dihydrate: CaSO₄·(H₂O)₂
-                    segment_multiplier = number;
+                    return Err(ParserError::MultiplierNoSegment);
                 }
             }
             TokenTypes::LParen => {
@@ -83,7 +111,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<String, u32>> {
 
                 // Recursively parse the serialized string.
                 let mut parsed = Vec::new();
-                for (s, c) in parse_internal(&segment)? {
+                for (s, c) in parse_internal(&segment)?.symbols {
                     parsed.push(SymbolCounter::new(s, c));
                 }
                 stack.push(parsed);
@@ -116,32 +144,25 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<String, u32>> {
                     return Err(ParserError::UnrecognizedSymbol);
                 }
             }
-            TokenTypes::Dot => {
-                // We will treat a mid-dot as though it were a bracketed segment.
-                // Apply any segment multipliers.
-                apply_segment_multiplier(&mut stack[segment_start..], &mut segment_multiplier);
-                segment_start = stack.len();
+            TokenTypes::ChargeSign(s) => {
+                // We have encountered a charge sign with no prior digit.
+                // This means that the charge is either +1 or -1.
 
-                // Serialize the next data segment.
-                let segment = serialize_segment(&mut iter)?;
-
-                let mut parsed = Vec::new();
-                for (s, c) in parse_internal(&segment)? {
-                    parsed.push(SymbolCounter::new(s, c));
+                // If the sign is negative then we need to invert the sign.
+                if *s == '-' {
+                    charge = -1;
+                } else {
+                    charge = 1;
                 }
-                stack.push(parsed);
+
+                return Err(ParserError::InvalidCharge);
+            }
+            TokenTypes::Dot => {
+                return Err(ParserError::UnexpectedMidDot);
             }
             _ => {}
         }
     }
-
-    // A segment multiplier with no segment is an error and the formula is invalid.
-    if stack.is_empty() && segment_multiplier > 0 {
-        return Err(ParserError::MultiplierNoSegment);
-    }
-
-    // Do we have a formula segment multiplier?
-    apply_segment_multiplier(&mut stack[segment_start..], &mut segment_multiplier);
 
     // Now we need to flatten the vector.
     let flat: Vec<SymbolCounter> = stack.iter().flatten().cloned().collect();
@@ -153,29 +174,35 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<HashMap<String, u32>> {
         *e += item.count;
     }
 
-    Ok(ret)
+    Ok(ParserResult {
+        symbols: ret,
+        charge,
+    })
 }
 
 #[cfg(test)]
 mod tests_parser {
-    use crate::equation_parser::{error::ParserError, *};
+    use crate::equation_parser::{error::ParserError, parser_result::ParserResult, *};
 
     use std::collections::HashMap;
 
     struct TestEntryOk<'a> {
         input: &'a str,
-        result: HashMap<String, u32>,
+        result: ParserResult,
     }
 
     impl TestEntryOk<'_> {
-        pub fn new(input: &str, outputs: Vec<(String, u32)>) -> TestEntryOk {
+        pub fn new(input: &str, outputs: Vec<(String, u32)>, charge: i32) -> TestEntryOk {
             let mut e = TestEntryOk {
                 input,
-                result: HashMap::new(),
+                result: ParserResult {
+                    symbols: HashMap::new(),
+                    charge,
+                },
             };
 
             for output in outputs {
-                e.result.insert(output.0, output.1);
+                e.result.symbols.insert(output.0, output.1);
             }
 
             e
@@ -197,84 +224,30 @@ mod tests_parser {
     fn test_parser_valid_formulae() {
         let tests = [
             // Basic formulae.
-            TestEntryOk::new("H", vec![("H".to_string(), 1)]),
-            TestEntryOk::new("H2", vec![("H".to_string(), 2)]),
-            TestEntryOk::new("H2Ca", vec![("H".to_string(), 2), ("Ca".to_string(), 1)]),
-            TestEntryOk::new("HCa", vec![("H".to_string(), 1), ("Ca".to_string(), 1)]),
-            TestEntryOk::new("2HCa", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
+            TestEntryOk::new("H", vec![("H".to_string(), 1)], 0),
+            TestEntryOk::new("H2", vec![("H".to_string(), 2)], 0),
+            TestEntryOk::new("H2Ca", vec![("H".to_string(), 2), ("Ca".to_string(), 1)], 0),
+            TestEntryOk::new("HCa", vec![("H".to_string(), 1), ("Ca".to_string(), 1)], 0),
             // Bracketed formulae.
-            TestEntryOk::new("(H2Ca2)", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
-            TestEntryOk::new("2(HCa)", vec![("H".to_string(), 2), ("Ca".to_string(), 2)]),
-            TestEntryOk::new("2(H2Ca)", vec![("H".to_string(), 4), ("Ca".to_string(), 2)]),
             TestEntryOk::new(
-                "2(H2Ca2)",
-                vec![("H".to_string(), 4), ("Ca".to_string(), 4)],
-            ),
-            TestEntryOk::new(
-                "2(H2Ca2)2",
-                vec![("H".to_string(), 8), ("Ca".to_string(), 8)],
+                "(H2Ca2)",
+                vec![("H".to_string(), 2), ("Ca".to_string(), 2)],
+                0,
             ),
             TestEntryOk::new(
                 "(H2Ca2)2",
                 vec![("H".to_string(), 4), ("Ca".to_string(), 4)],
-            ),
-            // Segmented formulae.
-            TestEntryOk::new(
-                "(H2Ca2)·O2",
-                vec![
-                    ("H".to_string(), 2),
-                    ("Ca".to_string(), 2),
-                    ("O".to_string(), 2),
-                ],
-            ),
-            TestEntryOk::new(
-                "2(H2Ca2)·O2",
-                vec![
-                    ("H".to_string(), 4),
-                    ("Ca".to_string(), 4),
-                    ("O".to_string(), 2),
-                ],
-            ),
-            TestEntryOk::new(
-                "H2Ca2·O2",
-                vec![
-                    ("H".to_string(), 2),
-                    ("Ca".to_string(), 2),
-                    ("O".to_string(), 2),
-                ],
-            ),
-            TestEntryOk::new(
-                "H2Ca2·2O2",
-                vec![
-                    ("H".to_string(), 2),
-                    ("Ca".to_string(), 2),
-                    ("O".to_string(), 4),
-                ],
-            ),
-            TestEntryOk::new(
-                "2H2Ca2·2O2",
-                vec![
-                    ("H".to_string(), 4),
-                    ("Ca".to_string(), 4),
-                    ("O".to_string(), 4),
-                ],
-            ),
-            TestEntryOk::new(
-                "2H2Ca2·2O2·U2",
-                vec![
-                    ("H".to_string(), 4),
-                    ("Ca".to_string(), 4),
-                    ("O".to_string(), 4),
-                    ("U".to_string(), 2),
-                ],
+                0,
             ),
             TestEntryOk::new(
                 "((H2Ca2))",
                 vec![("H".to_string(), 2), ("Ca".to_string(), 2)],
+                0,
             ),
             TestEntryOk::new(
                 "((H2)(Ca2))",
                 vec![("H".to_string(), 2), ("Ca".to_string(), 2)],
+                0,
             ),
             // Torture tests.
             TestEntryOk::new(
@@ -288,6 +261,7 @@ mod tests_parser {
                     ("Rb".to_string(), 3),
                     ("Pb".to_string(), 6),
                 ],
+                0,
             ),
             TestEntryOk::new(
                 "C228H236F72N12O30P12",
@@ -299,26 +273,29 @@ mod tests_parser {
                     ("O".to_string(), 30),
                     ("P".to_string(), 12),
                 ],
+                0,
             ),
             // Formulae with subscript unicode characters.
-            TestEntryOk::new("H₂", vec![("H".to_string(), 2)]),
-            TestEntryOk::new("H₂O2", vec![("H".to_string(), 2), ("O".to_string(), 2)]),
+            TestEntryOk::new("H₂", vec![("H".to_string(), 2)], 0),
+            TestEntryOk::new("H₂O2", vec![("H".to_string(), 2), ("O".to_string(), 2)], 0),
         ];
 
         for (i, test) in tests.into_iter().enumerate() {
-            let r = parser::parse(test.input);
+            let r = parser_basic::parse(test.input);
 
             assert!(
                 r.is_ok(),
-                "Failed to correctly parse valid formulae test {}",
-                i
+                "Failed to correctly parse valid formulae test {}, formula: {}",
+                i,
+                test.input,
             );
 
             assert_eq!(
                 r.unwrap(),
                 test.result,
-                "Failed to produce correct output for valid formula test {}",
-                i
+                "Failed to produce correct output for valid formula test {}, formula: {}",
+                i,
+                test.input
             );
         }
     }
@@ -333,9 +310,10 @@ mod tests_parser {
             TestEntryErr::new("())", ParserError::MismatchedParenthesis),
             TestEntryErr::new("(()", ParserError::MismatchedParenthesis),
             // Invalid segments.
-            TestEntryErr::new("·", ParserError::EmptySegment),
-            TestEntryErr::new("·H", ParserError::EmptySegment),
-            TestEntryErr::new("H·", ParserError::EmptySegment),
+            TestEntryErr::new("·", ParserError::UnexpectedMidDot),
+            TestEntryErr::new("H·O", ParserError::UnexpectedMidDot),
+            TestEntryErr::new("·H", ParserError::UnexpectedMidDot),
+            TestEntryErr::new("H·", ParserError::UnexpectedMidDot),
             // Multiplier with no terms.
             TestEntryErr::new("2", ParserError::MultiplierNoSegment),
             // Unknown symbol.

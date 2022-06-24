@@ -1,5 +1,9 @@
 fn main() {
-    let sub_dir = if cfg!(debug_assertions) { "debug" } else { "release" };
+    let sub_dir = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
 
     // Copy the database file to the build target directory pre-build.
     if std::fs::copy("data.db", format!("target\\{}\\data.db", sub_dir)).is_err() {
@@ -8,5 +12,4 @@ fn main() {
 }
 
 #[cfg(windows)]
-fn windows_only() {
-}
+fn windows_only() {}
