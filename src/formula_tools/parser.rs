@@ -3,7 +3,7 @@ use crate::definitions::element_data;
 use std::collections::HashMap;
 
 use super::{
-    error::{ParserError, Result},
+    error::*,
     parser_result::ParserResult,
     symbol_counter::SymbolCounter,
     tokenizer::{self, TokenTypes},
@@ -151,8 +151,6 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
             TokenTypes::ChargeSign(s) => {
                 // We have encountered a charge sign with no prior digit.
                 // This means that the charge is either +1 or -1.
-
-                // If the sign is negative then we need to invert the sign.
                 if *s == '-' {
                     charge = -1;
                 } else {
@@ -186,7 +184,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
 
 #[cfg(test)]
 mod tests_parser {
-    use crate::formula_parser::{error::ParserError, parser_result::ParserResult, *};
+    use crate::formula_tools::{error::ParserError, parser, parser_result::ParserResult};
 
     use std::collections::HashMap;
 

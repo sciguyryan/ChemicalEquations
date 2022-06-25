@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct ParserResult {
     pub symbols: HashMap<String, u32>,
     pub charge: i32,

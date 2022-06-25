@@ -1,16 +1,14 @@
 mod definitions;
-mod formula_parser;
+pub mod formula_tools;
 
 use std::collections::HashMap;
 
-use crate::{definitions::element_data, formula_parser::*};
+use crate::formula_tools::parser;
 
 fn main() {
-    eprintln!("{}", element_data::ELEMENT_DATA.data.len());
+    let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3";
 
-    let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3·2(H₂O)₂·2U2"; // CaSO₄·2(H₂O)₂·2U2
-
-    let cycles = 1;
+    let cycles = 100000;
 
     use std::time::Instant;
     let now = Instant::now();
