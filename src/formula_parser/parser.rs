@@ -71,6 +71,9 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
                     }
 
                     // The prior digit is the charge for this formula.
+                    // We assume that only one digit will be relevant for the charge since I don't know
+                    // of any charges that are 10 or above. Should one come to my attention then I will
+                    // come up with a different solution.
                     let charge_digit = buffer.pop().unwrap().to_string();
                     charge = parse_number(&charge_digit) as i32;
 
@@ -183,7 +186,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
 
 #[cfg(test)]
 mod tests_parser {
-    use crate::equation_parser::{error::ParserError, parser_result::ParserResult, *};
+    use crate::formula_parser::{error::ParserError, parser_result::ParserResult, *};
 
     use std::collections::HashMap;
 

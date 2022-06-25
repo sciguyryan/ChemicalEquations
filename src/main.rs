@@ -1,9 +1,9 @@
 mod definitions;
-mod equation_parser;
+mod formula_parser;
 
 use std::collections::HashMap;
 
-use crate::{definitions::element_data, equation_parser::*};
+use crate::{definitions::element_data, formula_parser::*};
 
 fn main() {
     eprintln!("{}", element_data::ELEMENT_DATA.data.len());
