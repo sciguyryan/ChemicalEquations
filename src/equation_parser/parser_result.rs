@@ -7,6 +7,7 @@ pub struct ParserResult {
 }
 
 impl ParserResult {
+    #[allow(unused)]
     pub fn new() -> Self {
         Self {
             symbols: HashMap::new(),

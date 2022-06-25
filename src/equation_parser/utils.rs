@@ -19,25 +19,6 @@ pub fn apply_multiplier(slice: &mut [SymbolCounter], mul: u32) {
     }
 }
 
-/// Apply a segment multiplier to an entire segment of the parsed formula.
-///
-/// # Arguments
-///
-/// * `stack` - The slice to which the multiplier should be applied.
-/// * `mul` - The multiplier.
-///
-pub fn apply_segment_multiplier(stack: &mut [Vec<SymbolCounter>], mul: &mut u32) {
-    // Do we have a formula segment multiplier?
-    if *mul > 0 {
-        // Apply the segment multiplier to the segment.
-        for segment in stack {
-            apply_multiplier(segment, *mul);
-        }
-
-        *mul = 0;
-    }
-}
-
 pub fn parse_number(str: &str) -> u32 {
     str.parse::<u32>().unwrap()
 }
@@ -53,6 +34,13 @@ pub fn sanitize(chars: &mut [char]) {
         // Subscript digits have to be normalized into their ASCII equivalents.
         let id = *c as u32;
         match id {
+            // Square brackets.
+            0x005B => {
+                *c = '(';
+            }
+            0x005D => {
+                *c = ')';
+            }
             // Subscript digits.
             0x2080..=0x2089 => {
                 let shifted_id = id - 0x2050;
@@ -71,10 +59,6 @@ pub fn sanitize(chars: &mut [char]) {
             // Superscript charge symbols.
             0x207A => *c = '+',
             0x207B => *c = '-',
-            // Middle dot.
-            0x00B7 => {
-                *c = '.';
-            }
             _ => {}
         }
     }
@@ -120,27 +104,6 @@ pub fn serialize_parenthesis(iter: &mut Peekable<Iter<TokenTypes>>) -> Result<Ve
 
     if paren_level > 0 {
         return Err(ParserError::MismatchedParenthesis);
-    }
-
-    Ok(tokens)
-}
-
-/// Serialize a formula segment.
-///
-/// # Arguments
-///
-/// * `iter` - A mutable reference to the [`TokenTypes`] iterator.
-///
-pub fn serialize_segment(iter: &mut Peekable<Iter<TokenTypes>>) -> Result<Vec<TokenTypes>> {
-    let mut tokens = Vec::with_capacity(10);
-
-    // Iterate until we reach the end of the segment.
-    while let Some(t) = iter.next_if(|&x| !matches!(x, TokenTypes::Dot)) {
-        tokens.push(*t);
-    }
-
-    if tokens.is_empty() {
-        return Err(ParserError::EmptySegment);
     }
 
     Ok(tokens)
