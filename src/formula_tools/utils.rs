@@ -19,6 +19,58 @@ pub fn apply_coefficient(slice: &mut [SymbolCounter], coeff: u32) {
     }
 }
 
+/// Map an applicable character to its subscript equivalent.
+///
+/// # Arguments
+///
+/// * `c` - The character to be converted into superscript.
+///
+pub fn map_to_subscript(c: char) -> char {
+    match c {
+        '0' => '₀',
+        '1' => '₁',
+        '2' => '₂',
+        '3' => '₃',
+        '4' => '₄',
+        '5' => '₅',
+        '6' => '₆',
+        '7' => '₇',
+        '8' => '₈',
+        '9' => '₉',
+        _ => c,
+    }
+}
+
+/// Map an applicable character to its superscript equivalent.
+///
+/// # Arguments
+///
+/// * `c` - The character to be converted into superscript.
+///
+pub fn map_to_superscript(c: char) -> char {
+    match c {
+        '0' => '⁰',
+        '1' => '¹',
+        '2' => '²',
+        '3' => '³',
+        '4' => '⁴',
+        '5' => '⁵',
+        '6' => '⁶',
+        '7' => '⁷',
+        '8' => '⁸',
+        '9' => '⁹',
+        '+' => '⁺',
+        '-' => '⁻',
+        _ => c,
+    }
+}
+
+/// Parse a numeric string into a u32.
+///
+/// # Arguments
+///
+/// * `str` - The numeric string to be parsed.
+///
 pub fn parse_number(str: &str) -> u32 {
     str.parse::<u32>().unwrap()
 }

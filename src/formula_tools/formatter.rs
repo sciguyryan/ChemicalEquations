@@ -164,7 +164,10 @@ mod tests_formatter {
             // Torture tests.
             TestEntryOk::new("(Zn2(Ca(BrO4))K(Pb)2Rb)3", "(Zn₂(Ca(BrO₄))K(Pb)₂Rb)₃"),
             TestEntryOk::new("C228H236F72N12O30P12", "C₂₂₈H₂₃₆F₇₂N₁₂O₃₀P₁₂"),
-            TestEntryOk::new("[(Zn2(Ca(BrO4))K(Pb)2Rb)3]²⁺", "[(Zn₂(Ca(BrO₄))K(Pb)₂Rb)₃]²⁺"),
+            TestEntryOk::new(
+                "[(Zn2(Ca(BrO4))K(Pb)2Rb)3]²⁺",
+                "[(Zn₂(Ca(BrO₄))K(Pb)₂Rb)₃]²⁺",
+            ),
             // Formulae with subscript and superscript unicode characters.
             TestEntryOk::new("H₂", "H₂"),
             TestEntryOk::new("H₂O2", "H₂O₂"),

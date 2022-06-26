@@ -40,7 +40,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
     // term multiplication, see the numeric processing below.
     let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
 
-    // The segment will be used to apply segment Coefficients.
+    // The segment will be used to apply segment coefficients.
     let mut charge: i32 = 0;
 
     let mut iter = tokens.iter().peekable();
@@ -89,7 +89,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
                         charge *= -1;
                     }
 
-                    // Is there still a Coefficient number to parse?
+                    // Is there still a coefficient number to parse?
                     if buffer.is_empty() {
                         continue;
                     }
@@ -97,13 +97,13 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
 
                 let number = parse_number(&buffer);
 
-                // We cannot use 0 as a Coefficient within a formula,
+                // We cannot use 0 as a coefficient within a formula,
                 // it's invalid syntax.
                 if number == 0 {
                     return Err(ParserError::InvalidCoefficient);
                 }
 
-                // Next, we need to apply this Coefficient to the last item
+                // Next, we need to apply this coefficient to the last item
                 // in the stack.
                 if let Some(last) = stack.last_mut() {
                     apply_coefficient(last, number);
