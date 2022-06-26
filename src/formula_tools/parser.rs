@@ -3,7 +3,7 @@ use crate::definitions::element_data;
 use std::collections::HashMap;
 
 use super::{
-    error::*,
+    parser_error::*,
     parser_result::ParserResult,
     symbol_counter::SymbolCounter,
     tokenizer::{self, TokenTypes},
@@ -40,7 +40,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
     // term multiplication, see the numeric processing below.
     let mut stack: Vec<Vec<SymbolCounter>> = Vec::new();
 
-    // The segment will be used to apply segment multipliers.
+    // The segment will be used to apply segment Coefficients.
     let mut charge: i32 = 0;
 
     let mut iter = tokens.iter().peekable();
@@ -70,16 +70,18 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
                         return Err(ParserError::InvalidChargePosition);
                     }
 
-                    // The prior digit is the charge for this formula.
-                    // We assume that only one digit will be relevant for the charge since I don't know
-                    // of any charges that are 10 or above. Should one come to my attention then I will
-                    // come up with a different solution.
+                    /*
+                        The prior digit is the charge for this formula.
+                        We assume that only one digit will be relevant for the charge since I don't know
+                        of any charges that are 10 or above. Should one come to my attention then I will
+                        come up with a different solution.
+                    */
                     let charge_digit = buffer.pop().unwrap().to_string();
                     charge = parse_number(&charge_digit) as i32;
 
                     // We cannot use 0 as a charge, it's invalid syntax.
                     if charge == 0 {
-                        return Err(ParserError::InvalidChargeMultiplier);
+                        return Err(ParserError::InvalidChargeCoefficient);
                     }
 
                     // If the sign is negative then we need to invert the sign.
@@ -87,7 +89,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
                         charge *= -1;
                     }
 
-                    // Is there still a multiplier number to parse?
+                    // Is there still a Coefficient number to parse?
                     if buffer.is_empty() {
                         continue;
                     }
@@ -95,23 +97,23 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
 
                 let number = parse_number(&buffer);
 
-                // We cannot use 0 as a multiplier within a formula,
+                // We cannot use 0 as a Coefficient within a formula,
                 // it's invalid syntax.
                 if number == 0 {
-                    return Err(ParserError::InvalidMultiplier);
+                    return Err(ParserError::InvalidCoefficient);
                 }
 
-                // Next, we need to apply this multiplier to the last item
+                // Next, we need to apply this Coefficient to the last item
                 // in the stack.
                 if let Some(last) = stack.last_mut() {
-                    apply_multiplier(last, number);
+                    apply_coefficient(last, number);
                 } else {
-                    return Err(ParserError::MultiplierNoSegment);
+                    return Err(ParserError::CoefficientNoSegment);
                 }
             }
-            TokenTypes::LParen => {
+            TokenTypes::LParen(c) => {
                 // Serialize until we reach the matching bracket.
-                let segment = serialize_parenthesis(&mut iter)?;
+                let segment = serialize_parenthesis(&mut iter, *c)?;
 
                 // Recursively parse the serialized string.
                 let mut parsed = Vec::new();
@@ -120,7 +122,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
                 }
                 stack.push(parsed);
             }
-            TokenTypes::RParen => {
+            TokenTypes::RParen(_) => {
                 return Err(ParserError::MismatchedParenthesis);
             }
             TokenTypes::ElementHead(c) => {
@@ -184,7 +186,7 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
 
 #[cfg(test)]
 mod tests_parser {
-    use crate::formula_tools::{error::ParserError, parser, parser_result::ParserResult};
+    use crate::formula_tools::{parser, parser_error::ParserError, parser_result::ParserResult};
 
     use std::collections::HashMap;
 
@@ -293,6 +295,15 @@ mod tests_parser {
                 -2,
             ),
             TestEntryOk::new(
+                "(CaCO3)2-",
+                vec![
+                    ("Ca".to_string(), 1),
+                    ("C".to_string(), 1),
+                    ("O".to_string(), 3),
+                ],
+                -2,
+            ),
+            TestEntryOk::new(
                 "CaCO32-",
                 vec![
                     ("Ca".to_string(), 1),
@@ -303,6 +314,34 @@ mod tests_parser {
             ),
             TestEntryOk::new(
                 "CaCO3²⁻",
+                vec![
+                    ("Ca".to_string(), 1),
+                    ("C".to_string(), 1),
+                    ("O".to_string(), 3),
+                ],
+                -2,
+            ),
+            TestEntryOk::new(
+                "CaCO3²-",
+                vec![
+                    ("Ca".to_string(), 1),
+                    ("C".to_string(), 1),
+                    ("O".to_string(), 3),
+                ],
+                -2,
+            ),
+            // Formulae with incorrect sub or superscript digits. These are sanitized and so parse correctly.
+            TestEntryOk::new(
+                "CaCO³²-",
+                vec![
+                    ("Ca".to_string(), 1),
+                    ("C".to_string(), 1),
+                    ("O".to_string(), 3),
+                ],
+                -2,
+            ),
+            TestEntryOk::new(
+                "CaCO³₂₋",
                 vec![
                     ("Ca".to_string(), 1),
                     ("C".to_string(), 1),
@@ -340,19 +379,23 @@ mod tests_parser {
             TestEntryErr::new("(", ParserError::MismatchedParenthesis),
             TestEntryErr::new("())", ParserError::MismatchedParenthesis),
             TestEntryErr::new("(()", ParserError::MismatchedParenthesis),
-            // Multiplier with no terms.
-            TestEntryErr::new("2", ParserError::MultiplierNoSegment),
+            TestEntryErr::new("[])", ParserError::MismatchedParenthesis),
+            TestEntryErr::new("[)]", ParserError::MismatchedParenthesis),
+            TestEntryErr::new("[", ParserError::MismatchedParenthesis),
+            TestEntryErr::new("[()", ParserError::MismatchedParenthesis),
+            // Coefficient with no terms.
+            TestEntryErr::new("2", ParserError::CoefficientNoSegment),
             // Unknown symbol.
             TestEntryErr::new("Zz", ParserError::UnrecognizedSymbol),
-            // Invalid multiplier.
-            TestEntryErr::new("H0", ParserError::InvalidMultiplier),
-            TestEntryErr::new("0(H2)", ParserError::InvalidMultiplier),
+            // Invalid coefficient.
+            TestEntryErr::new("H0", ParserError::InvalidCoefficient),
+            TestEntryErr::new("0(H2)", ParserError::InvalidCoefficient),
             // Invalid charges.
             TestEntryErr::new("+", ParserError::ChargeNoFormula),
             TestEntryErr::new("2+", ParserError::ChargeNoFormula),
             TestEntryErr::new("2+Na", ParserError::InvalidChargePosition),
             TestEntryErr::new("Ca2+Na", ParserError::InvalidChargePosition),
-            TestEntryErr::new("[Na]0+", ParserError::InvalidChargeMultiplier),
+            TestEntryErr::new("[Na]0+", ParserError::InvalidChargeCoefficient),
         ];
 
         for (i, test) in tests.into_iter().enumerate() {

@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::collections::HashMap;
 
 lazy_static! {
-    pub static ref ELEMENT_DATA: AllElementData = { AllElementData::new() };
+    pub static ref ELEMENT_DATA: AllElementData = AllElementData::new();
 }
 
 #[derive(Debug)]

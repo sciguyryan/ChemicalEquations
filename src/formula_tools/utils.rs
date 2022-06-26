@@ -1,21 +1,21 @@
 use super::{
-    error::{ParserError, Result},
+    parser_error::{ParserError, Result},
     symbol_counter::SymbolCounter,
     tokenizer::TokenTypes,
 };
 
 use std::{iter::Peekable, slice::Iter};
 
-/// Apply a segment multiplier to a specific segment of the parsed formula.
+/// Apply a coefficient to a specific segment of the parsed formula.
 ///
 /// # Arguments
 ///
 /// * `stack` - The slice to which the multiplier should be applied.
-/// * `mul` - The multiplier.
+/// * `coeff` - The coefficient.
 ///
-pub fn apply_multiplier(slice: &mut [SymbolCounter], mul: u32) {
+pub fn apply_coefficient(slice: &mut [SymbolCounter], coeff: u32) {
     for s in slice {
-        *s *= mul;
+        *s *= coeff;
     }
 }
 
@@ -34,13 +34,6 @@ pub fn sanitize(chars: &mut [char]) {
         // Subscript digits have to be normalized into their ASCII equivalents.
         let id = *c as u32;
         match id {
-            // Square brackets.
-            0x005B => {
-                *c = '(';
-            }
-            0x005D => {
-                *c = ')';
-            }
             // Subscript digits.
             0x2080..=0x2089 => {
                 let shifted_id = id - 0x2050;
@@ -59,8 +52,20 @@ pub fn sanitize(chars: &mut [char]) {
             // Superscript charge symbols.
             0x207A => *c = '+',
             0x207B => *c = '-',
+            // Subscript charge symbols.
+            0x208A => *c = '+',
+            0x208B => *c = '-',
             _ => {}
         }
+    }
+}
+
+fn matching_closing_parenthesis(c: char) -> char {
+    match c {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        _ => c,
     }
 }
 
@@ -70,7 +75,10 @@ pub fn sanitize(chars: &mut [char]) {
 ///
 /// * `iter` - A mutable reference to the [`TokenTypes`] iterator.
 ///
-pub fn serialize_parenthesis(iter: &mut Peekable<Iter<TokenTypes>>) -> Result<Vec<TokenTypes>> {
+pub fn serialize_parenthesis(
+    iter: &mut Peekable<Iter<TokenTypes>>,
+    paren_type: char,
+) -> Result<Vec<TokenTypes>> {
     let mut tokens = Vec::with_capacity(10);
 
     // The counter to indicate the depth of the parenthesis.
@@ -81,11 +89,17 @@ pub fn serialize_parenthesis(iter: &mut Peekable<Iter<TokenTypes>>) -> Result<Ve
     //   parenthesis. If there is a mismatch, we will panic.
     while let Some(t) = iter.peek() {
         match t {
-            TokenTypes::LParen => {
-                paren_level += 1;
+            TokenTypes::LParen(c) => {
+                // Is this parenthesis of a matching type?
+                if paren_type == *c {
+                    paren_level += 1;
+                }
             }
-            TokenTypes::RParen => {
-                paren_level -= 1;
+            TokenTypes::RParen(c) => {
+                // Is this parenthesis of a matching type?
+                if *c == matching_closing_parenthesis(paren_type) {
+                    paren_level -= 1;
+                }
 
                 // We have found the matching parenthesis.
                 if paren_level == 0 {

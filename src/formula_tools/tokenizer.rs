@@ -5,9 +5,9 @@ pub enum TokenTypes {
     /// A numeric character.
     Digit(char),
     /// A left (opening) parenthesis.
-    LParen,
+    LParen(char),
     /// A right (closing) parenthesis.
-    RParen,
+    RParen(char),
     /// The characters of an element symbol.
     ElementHead(char),
     /// The characters of an element symbol.
@@ -23,11 +23,11 @@ pub fn tokenize_string(chars: &[char]) -> Vec<TokenTypes> {
 
     for (i, c) in chars.iter().enumerate() {
         match c {
-            '(' => {
-                tokens.push(TokenTypes::LParen);
+            '(' | '[' => {
+                tokens.push(TokenTypes::LParen(*c));
             }
-            ')' => {
-                tokens.push(TokenTypes::RParen);
+            ')' | ']' => {
+                tokens.push(TokenTypes::RParen(*c));
             }
             '0'..='9' => {
                 tokens.push(TokenTypes::Digit(*c));

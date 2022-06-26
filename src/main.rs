@@ -3,12 +3,14 @@ pub mod formula_tools;
 
 use std::collections::HashMap;
 
-use crate::formula_tools::parser;
+use crate::formula_tools::{formatter, parser};
 
 fn main() {
-    let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)3";
+    let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)33+";
 
-    let cycles = 100000;
+    //println!("{:?}", formatter::format(formula));
+
+    let cycles = 1;
 
     use std::time::Instant;
     let now = Instant::now();
