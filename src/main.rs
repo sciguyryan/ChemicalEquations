@@ -8,17 +8,17 @@ use crate::formula_tools::parser;
 fn main() {
     let formula = "(Zn2(Ca(BrO4))K(Pb)2Rb)33+";
 
-    let cycles = 1;
+    let cycles = 10000;
 
     use std::time::Instant;
     let now = Instant::now();
     {
         for _ in 0..cycles {
-            let r = parser::parse(formula);
-            if let Ok(parsed) = r {
+            let r = parser::parse::parse(formula);
+            /*if let Ok(parsed) = r {
                 //print_sorted(parsed);
                 println!("{}", parsed.print());
-            }
+            }*/
         }
     }
     let elapsed = now.elapsed();

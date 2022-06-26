@@ -7,8 +7,9 @@ use super::{
     parser_result::ParserResult,
     symbol_counter::SymbolCounter,
     tokenizer::{self, TokenTypes},
-    utils::*,
 };
+
+use super::super::utils::*;
 
 /// Attempt to tokenize and parse an input string.
 ///
@@ -186,7 +187,9 @@ fn parse_internal(tokens: &[TokenTypes]) -> Result<ParserResult> {
 
 #[cfg(test)]
 mod tests_parser {
-    use crate::formula_tools::{parser, parser_error::ParserError, parser_result::ParserResult};
+    use crate::formula_tools::parser::{
+        parse, parser_error::ParserError, parser_result::ParserResult,
+    };
 
     use std::collections::HashMap;
 
@@ -352,7 +355,7 @@ mod tests_parser {
         ];
 
         for (i, test) in tests.into_iter().enumerate() {
-            let r = parser::parse(test.input);
+            let r = parse::parse(test.input);
 
             assert!(
                 r.is_ok(),
@@ -399,7 +402,7 @@ mod tests_parser {
         ];
 
         for (i, test) in tests.into_iter().enumerate() {
-            let r = parser::parse(test.input);
+            let r = parse::parse(test.input);
 
             assert_eq!(
                 r,

@@ -1,4 +1,4 @@
-use super::{
+use super::parser::{
     parser_error::{ParserError, Result},
     symbol_counter::SymbolCounter,
     tokenizer::TokenTypes,
