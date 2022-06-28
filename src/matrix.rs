@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct Matrix {
     m: Vec<Vec<f32>>,
 }
@@ -40,6 +41,7 @@ impl Matrix {
     }
 
     pub fn swap_rows(&mut self, index_1: usize, index_2: usize) {
+        assert_ne!(index_1, index_2);
         assert!(index_1 < self.row_count() && index_2 < self.row_count());
 
         let tmp = self.m[index_1].clone();
@@ -66,17 +68,18 @@ impl Matrix {
         result
     }
 
-    fn gcd(mut n: f32, mut m: f32) -> f32 {
-        assert!(n != 0.0 && m != 0.0);
+    fn gcd(mut a: f32, mut b: f32) -> f32 {
+        a = a.abs();
+        b = b.abs();
 
-        while m != 0.0 {
-            if m < n {
-                std::mem::swap(&mut m, &mut n);
+        while b != 0.0 {
+            if b < a {
+                std::mem::swap(&mut b, &mut a);
             }
-            m %= n;
+            b %= a;
         }
 
-        n
+        a
     }
 
     fn simplify_row(&self, row_index: usize) -> Vec<f32> {
@@ -93,6 +96,17 @@ impl Matrix {
         result
     }
 
+    fn simplify_row_in_place(&mut self, row_index: usize) {
+        assert!(row_index < self.row_count());
+
+        // Calculate the GCD of the row.
+        let gdc = self.gcd_row(row_index);
+
+        for entry in &mut self.m[row_index] {
+            *entry /= gdc;
+        }
+    }
+
     pub fn row_count(&self) -> usize {
         self.m.len()
     }
@@ -100,8 +114,31 @@ impl Matrix {
     pub fn column_count(&self) -> usize {
         self.m[0].len()
     }
+
+    pub fn rows(&self) -> impl Iterator<Item = &Vec<f32>> + '_ {
+        self.m.iter()
+    }
 }
 
+impl PartialEq for Matrix {
+    fn eq(&self, other: &Self) -> bool {
+        if self.row_count() != other.row_count() || self.column_count() != other.column_count() {
+            return false;
+        }
+
+        for i in 0..self.row_count() {
+            for j in 0..self.column_count() {
+                if self.get(i, j) != other.get(i, j) {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+}
+
+impl Eq for Matrix {}
 #[cfg(test)]
 mod tests_matrix {
     use std::panic;
@@ -109,7 +146,7 @@ mod tests_matrix {
     use super::Matrix;
 
     #[test]
-    fn test_matrix_create() {
+    fn test_create() {
         let matrix = Matrix::new(1, 3);
         assert_eq!(matrix.row_count(), 1);
         assert_eq!(matrix.column_count(), 3);
@@ -128,7 +165,7 @@ mod tests_matrix {
     }
 
     #[test]
-    fn test_matrix_get() {
+    fn test_get() {
         let mut matrix = Matrix::new(1, 3);
         matrix.set_row(0, vec![1.0, 2.0, 3.0]);
         assert_eq!(matrix.get(0, 1), 2.0);
@@ -147,7 +184,7 @@ mod tests_matrix {
     }
 
     #[test]
-    fn test_matrix_get_row() {
+    fn test_get_row() {
         let test_row = vec![1.0, 2.0, 3.0];
 
         let mut matrix = Matrix::new(1, 3);
@@ -162,7 +199,7 @@ mod tests_matrix {
     }
 
     #[test]
-    fn test_matrix_set() {
+    fn test_set() {
         let mut matrix = Matrix::new(1, 1);
         matrix.set(0, 0, 1.0);
         assert_eq!(matrix.get(0, 0), 1.0);
@@ -183,7 +220,7 @@ mod tests_matrix {
     }
 
     #[test]
-    fn test_matrix_set_row() {
+    fn test_set_row() {
         let mut matrix = Matrix::new(1, 1);
         matrix.set_row(0, vec![1.0]);
         assert_eq!(matrix.get_row(0), vec![1.0]);
@@ -192,6 +229,93 @@ mod tests_matrix {
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
             let _ = m.set_row(1, vec![1.0]);
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_swap_rows() {
+        let mut matrix = Matrix::new(2, 1);
+        matrix.set_row(0, vec![1.0]);
+        matrix.set_row(1, vec![2.0]);
+
+        matrix.swap_rows(0, 1);
+
+        let mut reference = Matrix::new(2, 1);
+        reference.set_row(0, vec![2.0]);
+        reference.set_row(1, vec![1.0]);
+
+        assert_eq!(matrix, reference);
+
+        // This should fail as we can't swap a row with itself.
+        let r = panic::catch_unwind(|| {
+            let mut m = Matrix::new(1, 1);
+            m.swap_rows(1, 1);
+        });
+        assert!(r.is_err());
+
+        // This should fail as the row index is larger than the number of rows.
+        let r = panic::catch_unwind(|| {
+            let mut m = Matrix::new(1, 1);
+            m.swap_rows(2, 1);
+        });
+        assert!(r.is_err());
+
+        // This should fail as the row index is larger than the number of rows.
+        let r = panic::catch_unwind(|| {
+            let mut m = Matrix::new(1, 1);
+            m.swap_rows(1, 2);
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_multiply_rows() {
+        let mut matrix = Matrix::new(2, 1);
+        matrix.set_row(0, vec![1.0]);
+        matrix.set_row(1, vec![2.0]);
+
+        matrix.multiply_row(0, 2.0);
+
+        let mut reference = Matrix::new(2, 1);
+        reference.set_row(0, vec![2.0]);
+        reference.set_row(1, vec![2.0]);
+
+        assert_eq!(matrix, reference);
+
+        // This should fail as the row index is larger than the number of rows.
+        let r = panic::catch_unwind(|| {
+            let mut m = Matrix::new(1, 1);
+            m.multiply_row(2, 1.0);
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_gcd_row() {
+        let tests = [
+            (vec![2.0, 4.0], 2.0),
+            (vec![2.0, -4.0], 2.0),
+            (vec![-2.0, 4.0], 2.0),
+            (vec![2.0, 5.0], 1.0),
+            (vec![0.0, 2.0], 2.0),
+            (vec![4.2, 2.1], 2.1),
+            (vec![0.0, 0.0], 0.0),
+        ];
+
+        let mut matrix = Matrix::new(1, 2);
+
+        for t in tests {
+            matrix.set_row(0, t.0);
+
+            let gcd = matrix.gcd_row(0);
+            assert_eq!(gcd, t.1);
+        }
+
+        // This should fail as the row index is larger than the number of rows.
+        let r = panic::catch_unwind(|| {
+            let m = Matrix::new(1, 1);
+            _ = m.gcd_row(2);
         });
         assert!(r.is_err());
     }
