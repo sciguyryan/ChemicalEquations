@@ -20,3 +20,32 @@ pub fn molar_mass(string: &str) -> Result<f32> {
 
     Ok(total_mass)
 }
+
+#[cfg(test)]
+mod tests_formatter {
+    use crate::formula_tools::molar_mass;
+
+    #[test]
+    fn test_molar_mass_calculator() {
+        let tests = [("H", 1.008)];
+
+        for (i, test) in tests.into_iter().enumerate() {
+            let r = molar_mass::molar_mass(test.0);
+
+            assert!(
+                r.is_ok(),
+                "Failed to correctly parse valid formulae test {}, formula: {}",
+                i,
+                test.0
+            );
+
+            assert_eq!(
+                r.unwrap(),
+                test.1,
+                "Failed to produce correct output for valid formula test {}, formula: {}",
+                i,
+                test.0
+            );
+        }
+    }
+}
