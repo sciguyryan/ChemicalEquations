@@ -46,9 +46,7 @@ impl Matrix {
         assert_ne!(index_1, index_2);
         assert!(index_1 < self.row_count() && index_2 < self.row_count());
 
-        let tmp = self.m[index_1].clone();
-        self.m[index_1] = self.m[index_2].clone();
-        self.m[index_2] = tmp;
+        self.m.swap(index_1, index_2);
     }
 
     pub fn multiply_row(&mut self, row_index: usize, scalar: f32) {
