@@ -82,7 +82,7 @@ impl Matrix {
         a
     }
 
-    fn simplify_row(&self, row_index: usize) -> Vec<f32> {
+    pub fn simplify_row(&self, row_index: usize) -> Vec<f32> {
         assert!(row_index < self.row_count());
 
         // Calculate the GCD of the row.
@@ -97,7 +97,7 @@ impl Matrix {
         result
     }
 
-    fn simplify_row_in_place(&mut self, row_index: usize) {
+    pub fn simplify_row_in_place(&mut self, row_index: usize) {
         assert!(row_index < self.row_count());
 
         // Calculate the GCD of the row.
@@ -107,6 +107,39 @@ impl Matrix {
         for entry in &mut self.m[row_index] {
             *entry /= gdc;
         }
+    }
+
+    pub fn transpose(&self) -> Self {
+        // With transposition, the columns and rows are reversed.
+        let rows = self.column_count();
+        let cols = self.row_count();
+
+        let mut matrix = Matrix::new(rows, cols);
+
+        for i in 0..self.row_count() {
+            for j in 0..self.column_count() {
+                matrix.set(j, i, self.get(i, j));
+            }
+        }
+
+        matrix
+    }
+
+    pub fn transpose_in_place(&mut self) {
+        // With transposition, the columns and rows are reversed.
+        let rows = self.column_count();
+        let cols = self.row_count();
+
+        let mut transposed = Matrix::new(rows, cols);
+
+        for i in 0..self.row_count() {
+            self.m.push(vec![]);
+            for j in 0..self.column_count() {
+                transposed.set(j, i, self.get(i, j));
+            }
+        }
+
+        *self = transposed;
     }
 
     pub fn row_count(&self) -> usize {
@@ -600,5 +633,59 @@ mod tests_matrix {
             m1 -= m2;
         });
         assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_transpose() {
+        let tests = [
+            (
+                vec![vec![1.0, 2.0], vec![3.0, 4.0]],
+                vec![vec![1.0, 3.0], vec![2.0, 4.0]],
+            ),
+            (vec![vec![1.0], vec![2.0]], vec![vec![1.0, 2.0]]),
+        ];
+
+        for t in tests {
+            let mut matrix = Matrix::new(t.0.len(), t.0[0].len());
+            for (i, r) in t.0.iter().enumerate() {
+                matrix.set_row(i, r.clone());
+            }
+
+            let mut reference = Matrix::new(t.1.len(), t.1[0].len());
+            for (i, r) in t.1.iter().enumerate() {
+                reference.set_row(i, r.clone());
+            }
+
+            let transposed = matrix.transpose();
+
+            assert_eq!(transposed, reference);
+        }
+    }
+
+    #[test]
+    fn test_transpose_in_place() {
+        let tests = [
+            (
+                vec![vec![1.0, 2.0], vec![3.0, 4.0]],
+                vec![vec![1.0, 3.0], vec![2.0, 4.0]],
+            ),
+            (vec![vec![1.0], vec![2.0]], vec![vec![1.0, 2.0]]),
+        ];
+
+        for t in tests {
+            let mut matrix = Matrix::new(t.0.len(), t.0[0].len());
+            for (i, r) in t.0.iter().enumerate() {
+                matrix.set_row(i, r.clone());
+            }
+
+            let mut reference = Matrix::new(t.1.len(), t.1[0].len());
+            for (i, r) in t.1.iter().enumerate() {
+                reference.set_row(i, r.clone());
+            }
+
+            matrix.transpose_in_place();
+
+            assert_eq!(matrix, reference);
+        }
     }
 }
