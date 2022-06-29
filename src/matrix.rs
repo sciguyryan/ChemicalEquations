@@ -87,6 +87,7 @@ impl Matrix {
 
         // Calculate the GCD of the row.
         let gdc = self.gcd_row(row_index);
+        assert_ne!(gdc, 0.0);
 
         let mut result = Vec::with_capacity(self.row_count());
         for entry in &self.m[row_index] {
@@ -101,6 +102,7 @@ impl Matrix {
 
         // Calculate the GCD of the row.
         let gdc = self.gcd_row(row_index);
+        assert_ne!(gdc, 0.0);
 
         for entry in &mut self.m[row_index] {
             *entry /= gdc;
@@ -316,6 +318,77 @@ mod tests_matrix {
         let r = panic::catch_unwind(|| {
             let m = Matrix::new(1, 1);
             _ = m.gcd_row(2);
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_gcd_simplify_row() {
+        let tests = [
+            (vec![2.0, 4.0], vec![1.0, 2.0]),
+            (vec![2.0, -4.0], vec![1.0, -2.0]),
+            (vec![-2.0, 4.0], vec![-1.0, 2.0]),
+            (vec![2.0, 5.0], vec![2.0, 5.0]),
+            (vec![0.0, 2.0], vec![0.0, 1.0]),
+            (vec![4.2, 2.1], vec![2.0, 1.0]),
+        ];
+
+        let mut matrix = Matrix::new(1, 2);
+
+        for t in tests {
+            matrix.set_row(0, t.0);
+
+            let simple = matrix.simplify_row(0);
+            assert_eq!(simple, t.1);
+        }
+
+        // We cannot divide by a zero, we expect a panic in that case.
+        let r = panic::catch_unwind(|| {
+            let mut m = Matrix::new(1, 1);
+            m.set_row(0, vec![0.0]);
+            _ = m.simplify_row(0);
+        });
+        assert!(r.is_err());
+
+        // This should fail as the row index is larger than the number of rows.
+        let r = panic::catch_unwind(|| {
+            let m = Matrix::new(1, 1);
+            _ = m.simplify_row(2);
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_gcd_simplify_row_in_place() {
+        let tests = [
+            (vec![2.0, 4.0], vec![1.0, 2.0]),
+            (vec![2.0, -4.0], vec![1.0, -2.0]),
+            (vec![-2.0, 4.0], vec![-1.0, 2.0]),
+            (vec![2.0, 5.0], vec![2.0, 5.0]),
+            (vec![0.0, 2.0], vec![0.0, 1.0]),
+            (vec![4.2, 2.1], vec![2.0, 1.0]),
+        ];
+
+        let mut matrix = Matrix::new(1, 2);
+
+        for t in tests {
+            matrix.set_row(0, t.0);
+            matrix.simplify_row_in_place(0);
+            assert_eq!(matrix.get_row(0), t.1);
+        }
+
+        // We cannot divide by a zero, we expect a panic in that case.
+        let r = panic::catch_unwind(|| {
+            let mut m = Matrix::new(1, 1);
+            m.set_row(0, vec![0.0]);
+            m.simplify_row_in_place(0);
+        });
+        assert!(r.is_err());
+
+        // This should fail as the row index is larger than the number of rows.
+        let r = panic::catch_unwind(|| {
+            let mut m = Matrix::new(1, 1);
+            m.simplify_row_in_place(2);
         });
         assert!(r.is_err());
     }
