@@ -22,6 +22,11 @@ fn main() {
     m.set_row(2, m3);
     m.set_row(3, m4);
 
+    //eprintln!("{:?}", m);
+
+    let test = m.gauss_jordan_eliminate_in_place();
+    eprintln!("{:?}", m);
+
     return;
 
     //let mut m: Vec<Vec<f32>> = vec![m1, m2, m3, m4];

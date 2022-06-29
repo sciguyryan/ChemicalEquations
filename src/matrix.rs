@@ -42,6 +42,31 @@ impl Matrix {
         self.m[index] = row;
     }
 
+    pub fn add_rows(row_1: Vec<f32>, row_2: Vec<f32>) -> Vec<f32> {
+        assert_eq!(row_1.len(), row_2.len());
+
+        let mut result = row_1.clone();
+
+        for (i, entry) in &mut result.iter_mut().enumerate() {
+            *entry += row_2[i];
+        }
+
+        result
+    }
+
+    pub fn add_rows_by_index(&mut self, index_1: usize, index_2: usize) -> Vec<f32> {
+        assert_ne!(index_1, index_2);
+        assert!(index_1 < self.row_count() && index_2 < self.row_count());
+
+        let mut result = Vec::with_capacity(self.column_count());
+
+        for i in 0..self.column_count() {
+            result.push(self.get(index_1, i) + self.get(index_2, i));
+        }
+
+        result
+    }
+
     pub fn swap_rows(&mut self, index_1: usize, index_2: usize) {
         assert_ne!(index_1, index_2);
         assert!(index_1 < self.row_count() && index_2 < self.row_count());
@@ -49,7 +74,17 @@ impl Matrix {
         self.m.swap(index_1, index_2);
     }
 
-    pub fn multiply_row(&mut self, row_index: usize, scalar: f32) {
+    pub fn multiply_row(row: Vec<f32>, scalar: f32) -> Vec<f32> {
+        let mut result = row.clone();
+
+        for entry in &mut result {
+            *entry *= scalar;
+        }
+
+        result
+    }
+
+    pub fn multiply_row_by_index(&mut self, row_index: usize, scalar: f32) {
         assert!(row_index < self.row_count());
 
         for entry in &mut self.m[row_index] {
@@ -57,7 +92,16 @@ impl Matrix {
         }
     }
 
-    pub fn gcd_row(&self, row_index: usize) -> f32 {
+    pub fn gcd_row(row: Vec<f32>) -> f32 {
+        let mut result = 0.0;
+        for entry in row {
+            result = Matrix::gcd(entry, result);
+        }
+
+        result
+    }
+
+    pub fn gcd_row_by_index(&self, row_index: usize) -> f32 {
         assert!(row_index < self.row_count());
 
         let mut result = 0.0;
@@ -82,11 +126,24 @@ impl Matrix {
         a
     }
 
-    pub fn simplify_row(&self, row_index: usize) -> Vec<f32> {
+    pub fn simplify_row(row: Vec<f32>) -> Vec<f32> {
+        // Calculate the GCD of the row.
+        let gdc = Matrix::gcd_row(row.clone());
+        assert_ne!(gdc, 0.0);
+
+        let mut result = row;
+        for entry in &mut result {
+            *entry /= gdc;
+        }
+
+        result
+    }
+
+    pub fn simplify_row_by_index(&self, row_index: usize) -> Vec<f32> {
         assert!(row_index < self.row_count());
 
         // Calculate the GCD of the row.
-        let gdc = self.gcd_row(row_index);
+        let gdc = self.gcd_row_by_index(row_index);
         assert_ne!(gdc, 0.0);
 
         let mut result = Vec::with_capacity(self.row_count());
@@ -97,11 +154,11 @@ impl Matrix {
         result
     }
 
-    pub fn simplify_row_in_place(&mut self, row_index: usize) {
+    pub fn simplify_row_by_index_in_place(&mut self, row_index: usize) {
         assert!(row_index < self.row_count());
 
         // Calculate the GCD of the row.
-        let gdc = self.gcd_row(row_index);
+        let gdc = self.gcd_row_by_index(row_index);
         assert_ne!(gdc, 0.0);
 
         for entry in &mut self.m[row_index] {
@@ -140,6 +197,15 @@ impl Matrix {
         }
 
         *self = transposed;
+    }
+
+    pub fn gauss_jordan_eliminate_in_place(&mut self) -> Matrix {
+        let mut matrix = self.clone();
+
+        let rows = matrix.row_count();
+        let cols = matrix.column_count();
+
+        matrix
     }
 
     pub fn row_count(&self) -> usize {
@@ -403,7 +469,7 @@ mod tests_matrix {
         matrix.set_row(0, vec![1.0]);
         matrix.set_row(1, vec![2.0]);
 
-        matrix.multiply_row(0, 2.0);
+        matrix.multiply_row_by_index(0, 2.0);
 
         let mut reference = Matrix::new(2, 1);
         reference.set_row(0, vec![2.0]);
@@ -414,7 +480,7 @@ mod tests_matrix {
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
-            m.multiply_row(2, 1.0);
+            m.multiply_row_by_index(2, 1.0);
         });
         assert!(r.is_err());
     }
@@ -456,14 +522,14 @@ mod tests_matrix {
         for t in tests {
             matrix.set_row(0, t.0);
 
-            let gcd = matrix.gcd_row(0);
+            let gcd = matrix.gcd_row_by_index(0);
             assert_eq!(gcd, t.1);
         }
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let m = Matrix::new(1, 1);
-            _ = m.gcd_row(2);
+            _ = m.gcd_row_by_index(2);
         });
         assert!(r.is_err());
     }
@@ -484,7 +550,7 @@ mod tests_matrix {
         for t in tests {
             matrix.set_row(0, t.0);
 
-            let simple = matrix.simplify_row(0);
+            let simple = matrix.simplify_row_by_index(0);
             assert_eq!(simple, t.1);
         }
 
@@ -492,14 +558,14 @@ mod tests_matrix {
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
             m.set_row(0, vec![0.0]);
-            _ = m.simplify_row(0);
+            _ = m.simplify_row_by_index(0);
         });
         assert!(r.is_err());
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let m = Matrix::new(1, 1);
-            _ = m.simplify_row(2);
+            _ = m.simplify_row_by_index(2);
         });
         assert!(r.is_err());
     }
@@ -519,7 +585,7 @@ mod tests_matrix {
 
         for t in tests {
             matrix.set_row(0, t.0);
-            matrix.simplify_row_in_place(0);
+            matrix.simplify_row_by_index_in_place(0);
             assert_eq!(matrix.get_row(0), t.1);
         }
 
@@ -527,14 +593,14 @@ mod tests_matrix {
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
             m.set_row(0, vec![0.0]);
-            m.simplify_row_in_place(0);
+            m.simplify_row_by_index_in_place(0);
         });
         assert!(r.is_err());
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
-            m.simplify_row_in_place(2);
+            m.simplify_row_by_index_in_place(2);
         });
         assert!(r.is_err());
     }
