@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
 #[derive(Clone, Debug)]
 pub struct Matrix {
