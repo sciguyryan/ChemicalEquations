@@ -1,3 +1,5 @@
+use std::ops::{Add, AddAssign};
+
 #[derive(Debug)]
 pub struct Matrix {
     m: Vec<Vec<f32>>,
@@ -54,6 +56,14 @@ impl Matrix {
 
         for entry in &mut self.m[row_index] {
             *entry *= scalar;
+        }
+    }
+
+    pub fn multiply_all(&mut self, scalar: f32) {
+        for row in &mut self.m {
+            for entry in row {
+                *entry *= scalar;
+            }
         }
     }
 
@@ -139,8 +149,42 @@ impl PartialEq for Matrix {
         true
     }
 }
-
 impl Eq for Matrix {}
+
+impl Add for Matrix {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        // Then adding a matrix, the dimensions of both matrices must be equal.
+        assert!(self.column_count() == rhs.column_count() && self.row_count() == rhs.row_count());
+
+        let r = self.row_count();
+        let c = self.column_count();
+        let mut matrix = Matrix::new(r, c);
+
+        for i in 0..r {
+            for j in 0..c {
+                matrix.set(i, j, self.get(i, j) + rhs.get(i, j));
+            }
+        }
+
+        matrix
+    }
+}
+
+impl AddAssign for Matrix {
+    fn add_assign(&mut self, rhs: Self) {
+        // Then adding a matrix, the dimensions of both matrices must be equal.
+        assert!(self.column_count() == rhs.column_count() && self.row_count() == rhs.row_count());
+
+        for i in 0..self.row_count() {
+            for j in 0..self.column_count() {
+                self.m[i][j] += rhs.get(i, j)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests_matrix {
     use std::panic;
@@ -170,7 +214,6 @@ mod tests_matrix {
     fn test_get() {
         let mut matrix = Matrix::new(1, 3);
         matrix.set_row(0, vec![1.0, 2.0, 3.0]);
-        assert_eq!(matrix.get(0, 1), 2.0);
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
@@ -294,6 +337,21 @@ mod tests_matrix {
     }
 
     #[test]
+    fn test_multiply_all() {
+        let mut matrix = Matrix::new(2, 1);
+        matrix.set_row(0, vec![1.0]);
+        matrix.set_row(1, vec![2.0]);
+
+        matrix.multiply_all(2.0);
+
+        let mut reference = Matrix::new(2, 1);
+        reference.set_row(0, vec![2.0]);
+        reference.set_row(1, vec![4.0]);
+
+        assert_eq!(matrix, reference);
+    }
+
+    #[test]
     fn test_gcd_row() {
         let tests = [
             (vec![2.0, 4.0], 2.0),
@@ -323,7 +381,7 @@ mod tests_matrix {
     }
 
     #[test]
-    fn test_gcd_simplify_row() {
+    fn test_simplify_row() {
         let tests = [
             (vec![2.0, 4.0], vec![1.0, 2.0]),
             (vec![2.0, -4.0], vec![1.0, -2.0]),
@@ -359,7 +417,7 @@ mod tests_matrix {
     }
 
     #[test]
-    fn test_gcd_simplify_row_in_place() {
+    fn test_simplify_row_in_place() {
         let tests = [
             (vec![2.0, 4.0], vec![1.0, 2.0]),
             (vec![2.0, -4.0], vec![1.0, -2.0]),
@@ -389,6 +447,54 @@ mod tests_matrix {
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
             m.simplify_row_in_place(2);
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_add() {
+        let tests = [
+            (vec![2.0, 4.0], vec![1.0, 2.0], vec![3.0, 6.0]),
+            (vec![-2.0, 4.0], vec![1.0, 2.0], vec![-1.0, 6.0]),
+            (vec![-2.0, -4.0], vec![-1.0, -2.0], vec![-3.0, -6.0]),
+        ];
+
+        for t in tests.clone() {
+            let mut matrix1 = Matrix::new(1, 2);
+            matrix1.set_row(0, t.0);
+
+            let mut matrix2 = Matrix::new(1, 2);
+            matrix2.set_row(0, t.1);
+
+            let result = matrix1 + matrix2;
+            assert_eq!(result.get_row(0), t.2);
+        }
+
+        // This should fail as the matrices have different dimensions.
+        let r = panic::catch_unwind(|| {
+            let m1 = Matrix::new(1, 1);
+            let m2 = Matrix::new(2, 1);
+            _ = m1 + m2;
+        });
+        assert!(r.is_err());
+
+        // Testing add assign.
+        for t in tests {
+            let mut matrix1 = Matrix::new(1, 2);
+            matrix1.set_row(0, t.0);
+
+            let mut matrix2 = Matrix::new(1, 2);
+            matrix2.set_row(0, t.1);
+
+            matrix1 += matrix2;
+            assert_eq!(matrix1.get_row(0), t.2);
+        }
+
+        // This should fail as the matrices have different dimensions.
+        let r = panic::catch_unwind(|| {
+            let mut m1 = Matrix::new(1, 1);
+            let m2 = Matrix::new(2, 1);
+            m1 += m2;
         });
         assert!(r.is_err());
     }
