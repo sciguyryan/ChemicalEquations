@@ -24,8 +24,8 @@ fn main() {
 
     //eprintln!("{:?}", m);
 
-    let test = m.gauss_jordan_eliminate_in_place();
-    eprintln!("{:?}", m);
+    let test = m.gauss_jordan_eliminate();
+    //eprintln!("{:?}", m);
 
     return;
 

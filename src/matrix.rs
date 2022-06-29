@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
 #[derive(Clone, Debug)]
 pub struct Matrix {
@@ -17,51 +17,27 @@ impl Matrix {
         Self { m: matrix }
     }
 
-    pub fn get(&self, row: usize, col: usize) -> f32 {
-        assert!(row < self.row_count() && col < self.column_count());
-
-        self.m[row][col]
-    }
-
-    pub fn get_row(&self, row: usize) -> Vec<f32> {
-        assert!(row < self.row_count());
-
-        self.m[row].clone()
-    }
-
     pub fn set(&mut self, row: usize, col: usize, val: f32) {
         assert!(row < self.row_count() && col < self.column_count());
 
-        self.m[row][col] = val;
+        self[row][col] = val;
     }
 
     pub fn set_row(&mut self, index: usize, row: Vec<f32>) {
         assert!(index < self.row_count());
         assert!(row.len() == self.column_count());
 
-        self.m[index] = row;
+        self[index] = row;
     }
 
-    pub fn add_rows(row_1: Vec<f32>, row_2: Vec<f32>) -> Vec<f32> {
-        assert_eq!(row_1.len(), row_2.len());
-
-        let mut result = row_1.clone();
-
-        for (i, entry) in &mut result.iter_mut().enumerate() {
-            *entry += row_2[i];
-        }
-
-        result
-    }
-
-    pub fn add_rows_by_index(&mut self, index_1: usize, index_2: usize) -> Vec<f32> {
+    pub fn add_rows(&mut self, index_1: usize, index_2: usize) -> Vec<f32> {
         assert_ne!(index_1, index_2);
         assert!(index_1 < self.row_count() && index_2 < self.row_count());
 
         let mut result = Vec::with_capacity(self.column_count());
 
         for i in 0..self.column_count() {
-            result.push(self.get(index_1, i) + self.get(index_2, i));
+            result.push(self[index_1][i] + self[index_2][i]);
         }
 
         result
@@ -74,17 +50,7 @@ impl Matrix {
         self.m.swap(index_1, index_2);
     }
 
-    pub fn multiply_row(row: Vec<f32>, scalar: f32) -> Vec<f32> {
-        let mut result = row.clone();
-
-        for entry in &mut result {
-            *entry *= scalar;
-        }
-
-        result
-    }
-
-    pub fn multiply_row_by_index(&mut self, row_index: usize, scalar: f32) {
+    pub fn multiply_row(&mut self, row_index: usize, scalar: f32) {
         assert!(row_index < self.row_count());
 
         for entry in &mut self.m[row_index] {
@@ -92,16 +58,7 @@ impl Matrix {
         }
     }
 
-    pub fn gcd_row(row: Vec<f32>) -> f32 {
-        let mut result = 0.0;
-        for entry in row {
-            result = Matrix::gcd(entry, result);
-        }
-
-        result
-    }
-
-    pub fn gcd_row_by_index(&self, row_index: usize) -> f32 {
+    pub fn gcd_row(&self, row_index: usize) -> f32 {
         assert!(row_index < self.row_count());
 
         let mut result = 0.0;
@@ -113,12 +70,19 @@ impl Matrix {
     }
 
     fn gcd(mut a: f32, mut b: f32) -> f32 {
+        if a == 0.0 {
+            return b;
+        }
+        if b == 0.0 {
+            return a;
+        }
+
         a = a.abs();
         b = b.abs();
 
         while b != 0.0 {
             if b < a {
-                std::mem::swap(&mut b, &mut a);
+                std::mem::swap(&mut a, &mut b);
             }
             b %= a;
         }
@@ -126,43 +90,30 @@ impl Matrix {
         a
     }
 
-    pub fn simplify_row(row: Vec<f32>) -> Vec<f32> {
-        // Calculate the GCD of the row.
-        let gdc = Matrix::gcd_row(row.clone());
-        assert_ne!(gdc, 0.0);
-
-        let mut result = row;
-        for entry in &mut result {
-            *entry /= gdc;
-        }
-
-        result
-    }
-
-    pub fn simplify_row_by_index(&self, row_index: usize) -> Vec<f32> {
+    pub fn simplify_row(&self, row_index: usize) -> Vec<f32> {
         assert!(row_index < self.row_count());
 
         // Calculate the GCD of the row.
-        let gdc = self.gcd_row_by_index(row_index);
+        let gdc = self.gcd_row(row_index);
         assert_ne!(gdc, 0.0);
 
         let mut result = Vec::with_capacity(self.row_count());
-        for entry in &self.m[row_index] {
+        for entry in &self[row_index] {
             result.push(entry / gdc);
         }
 
         result
     }
 
-    pub fn simplify_row_by_index_in_place(&mut self, row_index: usize) {
+    pub fn simplify_row_in_place(&mut self, row_index: usize) {
         assert!(row_index < self.row_count());
 
         // Calculate the GCD of the row.
-        let gdc = self.gcd_row_by_index(row_index);
-        assert_ne!(gdc, 0.0);
+        let gcd = self.gcd_row(row_index);
+        assert_ne!(gcd, 0.0);
 
-        for entry in &mut self.m[row_index] {
-            *entry /= gdc;
+        for entry in &mut self[row_index] {
+            *entry /= gcd;
         }
     }
 
@@ -175,7 +126,7 @@ impl Matrix {
 
         for i in 0..self.row_count() {
             for j in 0..self.column_count() {
-                matrix.set(j, i, self.get(i, j));
+                matrix.set(j, i, self[i][j]);
             }
         }
 
@@ -192,18 +143,69 @@ impl Matrix {
         for i in 0..self.row_count() {
             self.m.push(vec![]);
             for j in 0..self.column_count() {
-                transposed.set(j, i, self.get(i, j));
+                transposed.set(j, i, self[i][j]);
             }
         }
 
         *self = transposed;
     }
 
-    pub fn gauss_jordan_eliminate_in_place(&mut self) -> Matrix {
+    // Partial credit goes to Brian Z (brianzhouzc) for his Java implementation
+    // which can be found here:
+    // https://github.com/brianzhouzc/Chemical-Equation-Balancer/blob/master/Source Code/src/com/upas/eqbalancer/Balancer.java#L615
+    // It proved very helpful as a point of reference when I got stuck./
+    pub fn gauss_jordan_eliminate(&mut self) -> Matrix {
         let mut matrix = self.clone();
 
         let rows = matrix.row_count();
         let cols = matrix.column_count();
+
+        eprintln!("Starting matrix: {:?}", matrix);
+
+        let mut c = 0;
+        'outer: for r in 0..rows {
+            if c >= cols {
+                break;
+            }
+
+            // Find the pivot row.
+            let mut i = r;
+            while matrix[i][c] == 0.0 {
+                i += 1;
+                if i == rows {
+                    i = r;
+                    c += 1;
+                    if c == cols {
+                        break 'outer;
+                    }
+                }
+            }
+
+            // Switch the rows, but only if they have a different index.
+            if i != r {
+                matrix.swap_rows(i, r);
+            }
+
+            // Reduction phase.
+            let scale = matrix[r][c];
+            for j in 0..cols {
+                matrix[r][j] /= scale;
+            }
+
+            // Elimination phrase.
+            for i in 0..rows {
+                if i != r {
+                    let scale = matrix[i][c];
+                    for j in 0..cols {
+                        matrix[i][j] -= scale * matrix[r][j];
+                    }
+                }
+            }
+
+            c += 1;
+        }
+
+        eprintln!("Ending matrix: {:?}", matrix);
 
         matrix
     }
@@ -229,7 +231,7 @@ impl PartialEq for Matrix {
 
         for i in 0..self.row_count() {
             for j in 0..self.column_count() {
-                if self.get(i, j) != other.get(i, j) {
+                if self[i][j] != other[i][j] {
                     return false;
                 }
             }
@@ -279,7 +281,7 @@ impl Add for Matrix {
 
         for i in 0..r {
             for j in 0..c {
-                matrix.set(i, j, self.get(i, j) + rhs.get(i, j));
+                matrix.set(i, j, self[i][j] + rhs[i][j]);
             }
         }
 
@@ -294,7 +296,7 @@ impl AddAssign for Matrix {
 
         for i in 0..self.row_count() {
             for j in 0..self.column_count() {
-                self.m[i][j] += rhs.get(i, j)
+                self[i][j] += rhs[i][j]
             }
         }
     }
@@ -313,7 +315,7 @@ impl Sub for Matrix {
 
         for i in 0..r {
             for j in 0..c {
-                matrix.set(i, j, self.get(i, j) - rhs.get(i, j));
+                matrix.set(i, j, self[i][j] - rhs[i][j]);
             }
         }
 
@@ -328,9 +330,27 @@ impl SubAssign for Matrix {
 
         for i in 0..self.row_count() {
             for j in 0..self.column_count() {
-                self.m[i][j] -= rhs.get(i, j)
+                self[i][j] -= rhs[i][j]
             }
         }
+    }
+}
+
+impl Index<usize> for Matrix {
+    type Output = Vec<f32>;
+
+    fn index(&self, row_index: usize) -> &Self::Output {
+        assert!(row_index < self.row_count());
+
+        &self.m[row_index]
+    }
+}
+
+impl IndexMut<usize> for Matrix {
+    fn index_mut(&mut self, row_index: usize) -> &mut Self::Output {
+        assert!(row_index < self.row_count());
+
+        &mut self.m[row_index]
     }
 }
 
@@ -366,13 +386,13 @@ mod tests_matrix {
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
-            let _ = matrix.get(1, 0);
+            let _ = matrix[1][0];
         });
         assert!(r.is_err());
 
         // This should fail as the row index is larger than the number of columns.
         let r = panic::catch_unwind(|| {
-            let _ = matrix.get(0, 4);
+            let _ = matrix[0][4];
         });
         assert!(r.is_err());
     }
@@ -383,11 +403,11 @@ mod tests_matrix {
 
         let mut matrix = Matrix::new(1, 3);
         matrix.set_row(0, test_row.clone());
-        assert_eq!(matrix.get_row(0), test_row);
+        assert_eq!(matrix[0], test_row);
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
-            let _ = matrix.get_row(1);
+            let _ = matrix[1];
         });
         assert!(r.is_err());
     }
@@ -396,7 +416,7 @@ mod tests_matrix {
     fn test_set() {
         let mut matrix = Matrix::new(1, 1);
         matrix.set(0, 0, 1.0);
-        assert_eq!(matrix.get(0, 0), 1.0);
+        assert_eq!(matrix[0][0], 1.0);
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
@@ -417,7 +437,7 @@ mod tests_matrix {
     fn test_set_row() {
         let mut matrix = Matrix::new(1, 1);
         matrix.set_row(0, vec![1.0]);
-        assert_eq!(matrix.get_row(0), vec![1.0]);
+        assert_eq!(matrix[0], vec![1.0]);
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
@@ -469,7 +489,7 @@ mod tests_matrix {
         matrix.set_row(0, vec![1.0]);
         matrix.set_row(1, vec![2.0]);
 
-        matrix.multiply_row_by_index(0, 2.0);
+        matrix.multiply_row(0, 2.0);
 
         let mut reference = Matrix::new(2, 1);
         reference.set_row(0, vec![2.0]);
@@ -480,7 +500,7 @@ mod tests_matrix {
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
-            m.multiply_row_by_index(2, 1.0);
+            m.multiply_row(2, 1.0);
         });
         assert!(r.is_err());
     }
@@ -522,14 +542,14 @@ mod tests_matrix {
         for t in tests {
             matrix.set_row(0, t.0);
 
-            let gcd = matrix.gcd_row_by_index(0);
+            let gcd = matrix.gcd_row(0);
             assert_eq!(gcd, t.1);
         }
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let m = Matrix::new(1, 1);
-            _ = m.gcd_row_by_index(2);
+            _ = m.gcd_row(2);
         });
         assert!(r.is_err());
     }
@@ -550,7 +570,7 @@ mod tests_matrix {
         for t in tests {
             matrix.set_row(0, t.0);
 
-            let simple = matrix.simplify_row_by_index(0);
+            let simple = matrix.simplify_row(0);
             assert_eq!(simple, t.1);
         }
 
@@ -558,14 +578,14 @@ mod tests_matrix {
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
             m.set_row(0, vec![0.0]);
-            _ = m.simplify_row_by_index(0);
+            _ = m.simplify_row(0);
         });
         assert!(r.is_err());
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let m = Matrix::new(1, 1);
-            _ = m.simplify_row_by_index(2);
+            _ = m.simplify_row(2);
         });
         assert!(r.is_err());
     }
@@ -585,22 +605,22 @@ mod tests_matrix {
 
         for t in tests {
             matrix.set_row(0, t.0);
-            matrix.simplify_row_by_index_in_place(0);
-            assert_eq!(matrix.get_row(0), t.1);
+            matrix.simplify_row_in_place(0);
+            assert_eq!(matrix[0], t.1);
         }
 
         // We cannot divide by a zero, we expect a panic in that case.
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
             m.set_row(0, vec![0.0]);
-            m.simplify_row_by_index_in_place(0);
+            m.simplify_row_in_place(0);
         });
         assert!(r.is_err());
 
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
-            m.simplify_row_by_index_in_place(2);
+            m.simplify_row_in_place(2);
         });
         assert!(r.is_err());
     }
@@ -621,7 +641,7 @@ mod tests_matrix {
             matrix2.set_row(0, t.1);
 
             let result = matrix1 + matrix2;
-            assert_eq!(result.get_row(0), t.2);
+            assert_eq!(result[0], t.2);
         }
 
         // This should fail as the matrices have different dimensions.
@@ -641,7 +661,7 @@ mod tests_matrix {
             matrix2.set_row(0, t.1);
 
             matrix1 += matrix2;
-            assert_eq!(matrix1.get_row(0), t.2);
+            assert_eq!(matrix1[0], t.2);
         }
 
         // This should fail as the matrices have different dimensions.
@@ -669,7 +689,7 @@ mod tests_matrix {
             matrix2.set_row(0, t.1);
 
             let result = matrix1 - matrix2;
-            assert_eq!(result.get_row(0), t.2);
+            assert_eq!(result[0], t.2);
         }
 
         // This should fail as the matrices have different dimensions.
@@ -689,7 +709,7 @@ mod tests_matrix {
             matrix2.set_row(0, t.1);
 
             matrix1 -= matrix2;
-            assert_eq!(matrix1.get_row(0), t.2);
+            assert_eq!(matrix1[0], t.2);
         }
 
         // This should fail as the matrices have different dimensions.
