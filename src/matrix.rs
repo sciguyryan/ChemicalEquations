@@ -23,6 +23,24 @@ impl Matrix {
         self[row][col] = val;
     }
 
+    pub fn get_row(&self, index: usize) -> &[f32] {
+        assert!(index < self.row_count());
+
+        &self[index]
+    }
+
+    pub fn get_column(&self, index: usize) -> Vec<f32> {
+        assert!(index < self.column_count());
+
+        let mut result = Vec::with_capacity(self.column_count());
+
+        for row in self.rows() {
+            result.push(row[index]);
+        }
+
+        result
+    }
+
     pub fn set_row(&mut self, index: usize, row: Vec<f32>) {
         assert!(index < self.row_count());
         assert!(row.len() == self.column_count());
@@ -50,12 +68,34 @@ impl Matrix {
         self.m.swap(index_1, index_2);
     }
 
-    pub fn multiply_row(&mut self, row_index: usize, scalar: f32) {
+    pub fn multiply_row_by_scalar(&mut self, row_index: usize, scalar: f32) {
         assert!(row_index < self.row_count());
 
         for entry in &mut self.m[row_index] {
             *entry *= scalar;
         }
+    }
+
+    pub fn multiply_row(&self, row_index: usize) -> f32 {
+        assert!(row_index < self.row_count());
+
+        let mut result = 1.0;
+        for entry in &self.m[row_index] {
+            result *= *entry;
+        }
+
+        result
+    }
+
+    pub fn multiply_column(&self, column_index: usize) -> f32 {
+        assert!(column_index < self.column_count());
+
+        let mut result = 1.0;
+        for i in 0..self.row_count() {
+            result *= self.m[i][column_index];
+        }
+
+        result
     }
 
     pub fn gcd_row(&self, row_index: usize) -> f32 {
@@ -160,8 +200,6 @@ impl Matrix {
         let rows = matrix.row_count();
         let cols = matrix.column_count();
 
-        eprintln!("Starting matrix: {:?}", matrix);
-
         let mut c = 0;
         'outer: for r in 0..rows {
             if c >= cols {
@@ -192,7 +230,7 @@ impl Matrix {
                 matrix[r][j] /= scale;
             }
 
-            // Elimination phrase.
+            // Elimination phase.
             for i in 0..rows {
                 if i != r {
                     let scale = matrix[i][c];
@@ -205,9 +243,23 @@ impl Matrix {
             c += 1;
         }
 
-        eprintln!("Ending matrix: {:?}", matrix);
-
         matrix
+    }
+
+    pub fn identity(&self) -> Matrix {
+        let r = self.row_count();
+        let c = self.column_count();
+
+        // A matrix must be square to have an identity.
+        assert_eq!(r, c);
+
+        let mut m = Matrix::new(r, c);
+
+        for i in 0..r {
+            m[i][i] = 1.0;
+        }
+
+        m
     }
 
     pub fn row_count(&self) -> usize {
@@ -265,6 +317,46 @@ impl MulAssign<f32> for Matrix {
                 *entry *= rhs;
             }
         }
+    }
+}
+
+impl Mul<Matrix> for Matrix {
+    type Output = Self;
+
+    fn mul(self, rhs: Matrix) -> Self::Output {
+        let r_lhs = self.row_count();
+        let c_lhs = self.column_count();
+        let r_rhs = rhs.row_count();
+        let c_rhs = rhs.column_count();
+
+        // A dot product of matrices with dimensions (r1, c1) and
+        // dimensions (r2, c2) will not be possible where c1 ≠ r2.
+        assert_eq!(c_lhs, r_rhs);
+
+        // The dimensions of a dot product of matrices with dimensions (r1, c1) and
+        // dimensions (r2, c2) will be (r2, c2).
+        let mut dot_matrix = Matrix::new(r_lhs, c_rhs);
+
+        for i in 0..dot_matrix.row_count() {
+            for j in 0..dot_matrix.column_count() {
+                // The cell from the lhs matrix will be multiplied
+                // by the corresponding cell from the rhs matrix.
+                // These values will be collected into a single value
+                // by addition of the terms.
+                // The column and row will be reversed, e.g.:
+                // (0, 0) will be multiplied by (0, 0)
+                // (0, 1) will be multiplied by (1, 0)
+                // (0, 2) will be multiplied by (2, 0), and so on.
+                let mut dp = 0.0;
+                for (k, cell) in self[i].iter().enumerate() {
+                    dp += *cell * rhs[k][j];
+                }
+
+                dot_matrix[i][j] = dp;
+            }
+        }
+
+        dot_matrix
     }
 }
 
@@ -354,6 +446,18 @@ impl IndexMut<usize> for Matrix {
     }
 }
 
+impl From<&[Vec<f32>]> for Matrix {
+    fn from(item: &[Vec<f32>]) -> Self {
+        // All of the rows must be of the same length, otherwise this will panic.
+        let mut matrix = Matrix::new(item.len(), item[0].len());
+        for (i, row) in item.iter().enumerate() {
+            matrix.set_row(i, row.to_vec());
+        }
+
+        matrix
+    }
+}
+
 #[cfg(test)]
 mod tests_matrix {
     use std::panic;
@@ -375,6 +479,25 @@ mod tests_matrix {
         // This one should fail as zero columns are not valid.
         let r = panic::catch_unwind(|| {
             let _ = Matrix::new(1, 0);
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_create_from_vector() {
+        let vec = vec![vec![0.1, 0.2], vec![0.3, 0.4]];
+        let matrix = Matrix::from(&vec[..]);
+
+        let mut reference = Matrix::new(2, 2);
+        reference.set_row(0, vec![0.1, 0.2]);
+        reference.set_row(1, vec![0.3, 0.4]);
+
+        assert_eq!(reference, matrix);
+
+        // This one should fail as the rows have different lengths;
+        let r = panic::catch_unwind(|| {
+            let tv = vec![vec![0.1, 0.2, 0.3], vec![0.3, 0.4]];
+            _ = Matrix::from(&tv[..]);
         });
         assert!(r.is_err());
     }
@@ -408,6 +531,20 @@ mod tests_matrix {
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let _ = matrix[1];
+        });
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn test_get_column() {
+        let mut matrix = Matrix::new(2, 2);
+        matrix.set_row(0, vec![1.0, 2.0]);
+        matrix.set_row(1, vec![3.0, 4.0]);
+        assert_eq!(matrix.get_column(0), vec![1.0, 3.0]);
+
+        // This should fail as the row index is larger than the number of rows.
+        let r = panic::catch_unwind(|| {
+            let _ = matrix.get_column(2);
         });
         assert!(r.is_err());
     }
@@ -489,7 +626,7 @@ mod tests_matrix {
         matrix.set_row(0, vec![1.0]);
         matrix.set_row(1, vec![2.0]);
 
-        matrix.multiply_row(0, 2.0);
+        matrix.multiply_row_by_scalar(0, 2.0);
 
         let mut reference = Matrix::new(2, 1);
         reference.set_row(0, vec![2.0]);
@@ -500,13 +637,13 @@ mod tests_matrix {
         // This should fail as the row index is larger than the number of rows.
         let r = panic::catch_unwind(|| {
             let mut m = Matrix::new(1, 1);
-            m.multiply_row(2, 1.0);
+            m.multiply_row_by_scalar(2, 1.0);
         });
         assert!(r.is_err());
     }
 
     #[test]
-    fn test_multiply() {
+    fn test_multiply_by_scalar() {
         // Multiply by a scalar.
         let mut matrix = Matrix::new(2, 1);
         matrix.set_row(0, vec![1.0]);
@@ -523,6 +660,35 @@ mod tests_matrix {
         // Multiply by a scalar, with assignment.
         matrix *= 2.0;
         assert_eq!(matrix, reference);
+    }
+
+    #[test]
+    fn test_multiply_by_matrix() {
+        let mut matrix1 = Matrix::new(2, 3);
+        matrix1.set_row(0, vec![1.0, 2.0, 3.0]);
+        matrix1.set_row(1, vec![4.0, 5.0, 6.0]);
+
+        let mut matrix2 = Matrix::new(3, 2);
+        matrix2.set_row(0, vec![7.0, 8.0]);
+        matrix2.set_row(1, vec![9.0, 10.0]);
+        matrix2.set_row(2, vec![11.0, 12.0]);
+
+        let dot_matrix = matrix1 * matrix2;
+
+        let mut reference = Matrix::new(2, 2);
+        reference.set_row(0, vec![58.0, 64.0]);
+        reference.set_row(1, vec![139.0, 154.0]);
+
+        assert_eq!(dot_matrix, reference);
+
+        // This should panic because the matrices do not have compatible
+        // dimensions.
+        let r = panic::catch_unwind(|| {
+            let m1 = Matrix::new(2, 2);
+            let m2 = Matrix::new(3, 2);
+            _ = m1 * m2;
+        });
+        assert!(r.is_err());
     }
 
     #[test]
@@ -712,7 +878,7 @@ mod tests_matrix {
             assert_eq!(matrix1[0], t.2);
         }
 
-        // This should fail as the matrices have different dimensions.
+        // This should panic as the matrices have different dimensions.
         let r = panic::catch_unwind(|| {
             let mut m1 = Matrix::new(1, 1);
             let m2 = Matrix::new(2, 1);
@@ -732,18 +898,8 @@ mod tests_matrix {
         ];
 
         for t in tests {
-            let mut matrix = Matrix::new(t.0.len(), t.0[0].len());
-            for (i, r) in t.0.iter().enumerate() {
-                matrix.set_row(i, r.clone());
-            }
-
-            let mut reference = Matrix::new(t.1.len(), t.1[0].len());
-            for (i, r) in t.1.iter().enumerate() {
-                reference.set_row(i, r.clone());
-            }
-
-            let transposed = matrix.transpose();
-
+            let transposed = Matrix::from(&t.0[..]).transpose();
+            let reference = Matrix::from(&t.1[..]);
             assert_eq!(transposed, reference);
         }
     }
@@ -759,19 +915,91 @@ mod tests_matrix {
         ];
 
         for t in tests {
-            let mut matrix = Matrix::new(t.0.len(), t.0[0].len());
-            for (i, r) in t.0.iter().enumerate() {
-                matrix.set_row(i, r.clone());
-            }
-
-            let mut reference = Matrix::new(t.1.len(), t.1[0].len());
-            for (i, r) in t.1.iter().enumerate() {
-                reference.set_row(i, r.clone());
-            }
+            let mut matrix = Matrix::from(&t.0[..]);
+            let reference = Matrix::from(&t.1[..]);
 
             matrix.transpose_in_place();
-
             assert_eq!(matrix, reference);
         }
+    }
+
+    #[test]
+    fn test_gauss_jordan_eliminate() {
+        let tests = [
+            (
+                vec![vec![1.0, 2.0], vec![3.0, 4.0]],
+                vec![vec![1.0, 0.0], vec![0.0, 1.0]],
+            ),
+            (
+                vec![
+                    vec![-1.0, 2.0, 3.0],
+                    vec![4.0, 5.0, 6.0],
+                    vec![7.0, 8.0, 9.0],
+                ],
+                vec![
+                    vec![1.0, 0.0, 0.0],
+                    vec![0.0, 1.0, 0.0],
+                    vec![0.0, 0.0, 1.0],
+                ],
+            ),
+            (
+                vec![
+                    vec![-78.3, 60.3, -67.2],
+                    vec![-75.7, 96.3, 80.8],
+                    vec![68.6, 35.8, 7.4],
+                ],
+                vec![
+                    vec![1.0, 0.0, 0.0],
+                    vec![0.0, 1.0, 0.0],
+                    vec![0.0, 0.0, 1.0],
+                ],
+            ),
+            (
+                vec![
+                    vec![1.0, 2.0, 2.0, 0.0],
+                    vec![0.0, 4.0, 3.0, 1.0],
+                    vec![3.0, 8.0, 0.0, 2.0],
+                    vec![0.0, 1.0, 2.0, 0.0],
+                ],
+                vec![
+                    vec![1.0, 0.0, 0.0, -0.4],
+                    vec![0.0, 1.0, 0.0, 0.4],
+                    vec![0.0, 0.0, 1.0, -0.2],
+                    vec![0.0, 0.0, 0.0, 0.0],
+                ],
+            ),
+        ];
+
+        for t in tests {
+            let modified = Matrix::from(&t.0[..]).gauss_jordan_eliminate();
+            let reference = Matrix::from(&t.1[..]);
+            assert_eq!(modified, reference);
+        }
+    }
+
+    #[test]
+    fn test_identity() {
+        let tests = [
+            vec![vec![1.0]],
+            vec![vec![1.0, 0.0], vec![0.0, 1.0]],
+            vec![
+                vec![1.0, 0.0, 0.0],
+                vec![0.0, 1.0, 0.0],
+                vec![0.0, 0.0, 1.0],
+            ],
+        ];
+
+        for (i, test) in tests.iter().enumerate() {
+            let identity_matrix = Matrix::new(i + 1, i + 1).identity();
+            let reference = Matrix::from(&test[..]);
+            assert_eq!(identity_matrix, reference);
+        }
+
+        // This should panic as the matrix is not square.
+        let r = panic::catch_unwind(|| {
+            let m = Matrix::new(1, 2);
+            _ = m.identity();
+        });
+        assert!(r.is_err());
     }
 }
