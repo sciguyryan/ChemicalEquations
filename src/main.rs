@@ -4,6 +4,8 @@ mod matrix;
 
 use std::collections::HashMap;
 
+use nalgebra::SMatrix;
+
 use crate::{formula_tools::parser, matrix::Matrix};
 
 fn main() {
@@ -11,21 +13,28 @@ fn main() {
     let rterms: Vec<Vec<f32>> = Vec::new();
     let pterms: Vec<Vec<f32>> = Vec::new();
 
-    let m1 = vec![1.0, 2.0, 2.0, 0.0];
-    let m2 = vec![0.0, 4.0, 3.0, 1.0];
-    let m3 = vec![3.0, 8.0, 0.0, 2.0];
-    let m4 = vec![0.0, 1.0, 2.0, 0.0];
+    let m = vec![
+        vec![1.0, 2.0, 2.0, 0.0],
+        vec![0.0, 4.0, 3.0, 1.0],
+        vec![-3.0, -8.0, 0.0, -2.0],
+        vec![0.0, -1.0, -2.0, 0.0],
+    ];
 
-    let mut m = Matrix::new(4, 4);
-    m.set_row(0, m1);
-    m.set_row(1, m2);
-    m.set_row(2, m3);
-    m.set_row(3, m4);
+    let mut matrix = Matrix::from(&m[..]);
 
     //eprintln!("{:?}", m);
 
-    let test = m.gauss_jordan_eliminate();
-    //eprintln!("{:?}", m);
+    let rrrrr: Vec<f32> = m.into_iter().flatten().collect();
+    eprintln!("{:?}", rrrrr);
+
+    let mut test = SMatrix::<f32, 4, 4>::from_vec(rrrrr);
+
+    eprintln!("{:?}", test);
+
+    let mut transposed = test.transpose();
+
+    let tttttttt = transposed.determinant();
+    eprintln!("{:?}", tttttttt);
 
     return;
 

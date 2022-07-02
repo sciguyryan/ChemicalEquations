@@ -41,6 +41,60 @@ impl Matrix {
         result
     }
 
+    pub fn determinant(&self) -> f32 {
+        // The matrix must be square in order to compute the determinant.
+        assert_eq!(self.row_count(), self.column_count());
+
+        // Fast path for 2x2 matrices.
+        if self.m.len() == 2 {
+            return self[0][0] * self[1][1] - self[0][1] * self[1][0];
+        }
+
+        let mut det = 0.0;
+        for i in 0..self.column_count() {
+            det += f32::powf(-1.0, i as f32) * self[0][i] * Matrix::determinant(&self.minor(0, i))
+        }
+
+        0.0
+    }
+
+    fn minor(&self, row_index: usize, col_index: usize) -> Matrix {
+        let mut minor_matrix = Matrix::new(self.row_count(), self.column_count());
+
+        for i in 0..self.row_count() {
+            let mut j = 0;
+            loop {
+                if i == row_index || j >= self.column_count() {
+                    break;
+                }
+
+                if j != col_index {
+                    let r = if i < row_index { i } else { i - 1 };
+                    let c = if j < col_index { j } else { j - 1};
+
+                    minor_matrix[r][c] = self[i][j];
+                }
+
+                j += i
+            }
+        }
+
+        minor_matrix
+    }
+
+    pub fn expand(&mut self, rows: usize, cols: usize)  {
+        // Add new rows, if required.
+        for _ in 0..rows {
+            self.m.push(vec![0.0; self.column_count()]);
+        }
+
+        if cols > 0 {
+            for row in &mut self.m {
+                row.extend_from_slice(&vec![0.0; cols])
+            }
+        }
+    }
+
     pub fn set_row(&mut self, index: usize, row: Vec<f32>) {
         assert!(index < self.row_count());
         assert!(row.len() == self.column_count());
@@ -193,7 +247,7 @@ impl Matrix {
     // Partial credit goes to Brian Z (brianzhouzc) for his Java implementation
     // which can be found here:
     // https://github.com/brianzhouzc/Chemical-Equation-Balancer/blob/master/Source Code/src/com/upas/eqbalancer/Balancer.java#L615
-    // It proved very helpful as a point of reference when I got stuck./
+    // It proved very helpful as a point of reference when I got stuck.
     pub fn gauss_jordan_eliminate(&mut self) -> Matrix {
         let mut matrix = self.clone();
 
@@ -230,6 +284,7 @@ impl Matrix {
                 matrix[r][j] /= scale;
             }
 
+
             // Elimination phase.
             for i in 0..rows {
                 if i != r {
@@ -246,7 +301,7 @@ impl Matrix {
         matrix
     }
 
-    pub fn identity(&self) -> Matrix {
+    pub fn identity_matrix(&self) -> Matrix {
         let r = self.row_count();
         let c = self.column_count();
 
@@ -990,7 +1045,7 @@ mod tests_matrix {
         ];
 
         for (i, test) in tests.iter().enumerate() {
-            let identity_matrix = Matrix::new(i + 1, i + 1).identity();
+            let identity_matrix = Matrix::new(i + 1, i + 1).identity_matrix();
             let reference = Matrix::from(&test[..]);
             assert_eq!(identity_matrix, reference);
         }
@@ -998,7 +1053,7 @@ mod tests_matrix {
         // This should panic as the matrix is not square.
         let r = panic::catch_unwind(|| {
             let m = Matrix::new(1, 2);
-            _ = m.identity();
+            _ = m.identity_matrix();
         });
         assert!(r.is_err());
     }
