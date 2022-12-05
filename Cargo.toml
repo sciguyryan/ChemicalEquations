@@ -13,7 +13,7 @@ build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-fraction = "0.11.0"
+fraction = "0.12.2"
 lazy_static = "1.4.0"
 nalgebra = "0.31.0"
 rusqlite = { version = "0.27.0", features = ["bundled"] }
